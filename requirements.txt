@@ -1,0 +1,42 @@
+# Python 3.11 Dependencies - Raspberry Pi 5 + Hailo-8L
+# Sistema de Asistencia a Invidentes
+
+# === Hailo AI Platform ===
+# NOTE: hailo-platform and hailo-apps-infra must be installed from Hailo's repository
+# These are not available via pip, install from: https://github.com/hailo-ai/hailo-rpi5-examples
+# hailo-platform>=4.17.0
+# hailo-apps-infra>=4.17.0
+
+# GStreamer bindings for Hailo apps (automatic model download)
+PyGObject>=3.42.0
+
+# === Computer Vision ===
+numpy>=1.24.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# === Camera (Arducam IMX296) ===
+picamera2>=0.3.16
+
+# === Audio/TTS ===
+pyttsx3>=2.90
+playsound>=1.3.0
+pygame>=2.5.0
+
+# === GPIO/Hardware Control ===
+RPi.GPIO>=0.7.1
+gpiozero>=2.0
+
+# === I2C/Serial Communication (ToF VL53L5CX) ===
+smbus2>=0.4.2
+pyserial>=3.5
+
+# === Thermal Monitoring ===
+psutil>=5.9.0
+
+# === Logging & Configuration ===
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# === Threading & Concurrency ===
+# (Built-in: threading, multiprocessing, queue)
