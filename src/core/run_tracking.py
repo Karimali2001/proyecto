@@ -89,7 +89,7 @@ class RunTracking(State):
 
                 for label, bbox, score in clean_detections:
                     # bbox is [x1, y1, x2, y2]
-                    dets_to_track.append(bbox + [score])
+                    dets_to_track.append(list(bbox) + [score])
                     dets_labels.append(label)
 
                 final_tracks = []
