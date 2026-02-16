@@ -6,6 +6,7 @@ import numpy as np
 from types import SimpleNamespace  # Added for tracker config
 import sys  # Added for path adjustment if needed
 import os
+import inspect
 
 # Adjust path to find common if necessary, mirroring user provided snippet
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -25,12 +26,14 @@ class RunTracking(State):
         self.thread = None
 
         # Initialize Tracker
-        # Default configuration for BYTETracker based on common usage
         tracker_args = SimpleNamespace(
             track_thresh=0.5, track_buffer=30, match_thresh=0.8, mot20=False
         )
         self.tracker = BYTETracker(tracker_args)
         self.active_ids = set()  # To keep track of currently visible IDs for logging
+
+        # Compatibilidad: algunas versiones aceptan update(dets), otras update(dets, img_info, img_size)
+        self._tracker_update_uses_img_meta = self._detect_tracker_update_signature()
 
     def draw_detections_callback(self, request):
         """Esta función es llamada automáticamente por Picamera2 antes de mostrar cada frame."""
@@ -58,6 +61,31 @@ class RunTracking(State):
                         1,
                         cv2.LINE_AA,
                     )
+
+    def _detect_tracker_update_signature(self) -> bool:
+        """True si update espera metadata de imagen además de detecciones."""
+        try:
+            # Método ligado: parámetros aquí no incluyen 'self'
+            param_count = len(inspect.signature(self.tracker.update).parameters)
+            return param_count >= 3
+        except Exception:
+            return False
+
+    def _tracker_update(self, dets_array, video_h, video_w):
+        """Llama update con la firma correcta y hace fallback automático."""
+        img_info = (video_h, video_w)
+        img_size = (video_h, video_w)
+
+        try:
+            if self._tracker_update_uses_img_meta:
+                return self.tracker.update(dets_array, img_info, img_size)
+            return self.tracker.update(dets_array)
+        except TypeError:
+            # Fallback si la detección inicial no coincide con la implementación real
+            self._tracker_update_uses_img_meta = not self._tracker_update_uses_img_meta
+            if self._tracker_update_uses_img_meta:
+                return self.tracker.update(dets_array, img_info, img_size)
+            return self.tracker.update(dets_array)
 
     def _run_inference_loop(self):
 
@@ -97,11 +125,8 @@ class RunTracking(State):
 
                 if dets_to_track:
                     dets_array = np.array(dets_to_track, dtype=float)
-                    # img_info and img_size are often (height, width)
-                    img_info = (video_h, video_w)
-                    img_size = (video_h, video_w)
 
-                    online_targets = self.tracker.update(dets_array, img_info, img_size)
+                    online_targets = self._tracker_update(dets_array, video_h, video_w)
 
                     for t in online_targets:
                         # Map back to closest class label or just use the one from tracking if tracker stored it (BYTETracker usually just tracks boxes)
