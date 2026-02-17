@@ -12,6 +12,7 @@ class Context:
     # Update these types to your actual classes if possible, or use Any/Optional
     camera_driver: Optional[Any] = None
     hailo_driver: Optional[Any] = None
+    audio_output_driver: Optional[Any] = None
 
     def __init__(self, state: State) -> None:
         self.transition_to(state)

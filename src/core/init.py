@@ -2,6 +2,7 @@ import argparse
 from .state import State
 from src.drivers.camera_driver import CameraDriver
 from src.drivers.hailo_driver import HailoDriver
+from src.drivers.audio_output_driver import AudioOutputDriver
 
 class InitState(State):
     def process(self) -> None:
@@ -40,5 +41,12 @@ class InitState(State):
             print(f"[INIT] Error initializing Camera: {e}")
             return
 
+        try:
+            self.context.audio_output_driver = AudioOutputDriver()
+        except Exception as e:
+            print(f"[INIT] Error initializing audio output: {e}")
+            return
         print("[INIT] Todo listo. Cambiando a Tracking.")
         self.context.transition_to(RunTracking())
+        
+    

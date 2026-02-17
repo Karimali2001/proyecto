@@ -7,6 +7,7 @@ from types import SimpleNamespace  # Added for tracker config
 import sys  # Added for path adjustment if needed
 import os
 import inspect
+import json
 
 # Adjust path to find common if necessary, mirroring user provided snippet
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -31,6 +32,7 @@ class RunTracking(State):
         )
         self.tracker = BYTETracker(tracker_args)
         self.active_ids = set()  # To keep track of currently visible IDs for logging
+        self.logged_ids = set()  # New set to remember what we have already logged
 
         # Compatibilidad: algunas versiones aceptan update(dets), otras update(dets, img_info, img_size)
         self._tracker_update_uses_img_meta = self._detect_tracker_update_signature()
@@ -91,6 +93,7 @@ class RunTracking(State):
 
         driver_cam = self.context.camera_driver
         driver_ai = self.context.hailo_driver
+        driver_audio = self.context.audio_output_driver
 
         while self.running:
             try:
@@ -122,6 +125,8 @@ class RunTracking(State):
 
                 final_tracks = []
                 current_frame_ids = set()
+                # Dictionary to store ID -> Label mapping for this frame for logging
+                id_to_label_map = {}
 
                 if dets_to_track:
                     dets_array = np.array(dets_to_track, dtype=float)
@@ -142,35 +147,68 @@ class RunTracking(State):
                             x1, y1, w, h = tlwh
                             bbox_int = [int(x1), int(y1), int(x1 + w), int(y1 + h)]
 
-                            # Simple label logic: just "Object" or try to find matching detection
-                            # In a real rigorous setup we pass class ID into tracker or match by IOU
+                            # Find best matching original detection to recover label
                             label_str = "Object"
-                            # Rough matching to original detection to get Class Name back
-                            best_iou = 0
+                            best_iou = 0.0
+
+                            t_area = w * h
+
+                            # Simple IoU-like check to find which detection this track belongs to
                             for orig_label, orig_bbox, orig_score in clean_detections:
-                                # Calculate IOU to carry over the class label
-                                # ... (skipped complex IOU for brevity, picking last or default)
-                                label_str = orig_label
+                                # orig_bbox is [x1, y1, x2, y2]
+                                ox1, oy1, ox2, oy2 = orig_bbox
+
+                                # Intersect
+                                ix1 = max(x1, ox1)
+                                iy1 = max(y1, oy1)
+                                ix2 = min(x1 + w, ox2)
+                                iy2 = min(y1 + h, oy2)
+
+                                iw = max(0, ix2 - ix1)
+                                ih = max(0, iy2 - iy1)
+                                intersection = iw * ih
+
+                                # Using intersection over tracked area as a simple proxy for matching
+                                if t_area > 0:
+                                    match_score = intersection / t_area
+                                    if match_score > best_iou and match_score > 0.5:
+                                        best_iou = match_score
+                                        label_str = orig_label
 
                             final_tracks.append((label_str, bbox_int, t.score, tid))
                             current_frame_ids.add(tid)
+                            id_to_label_map[tid] = label_str
 
                 # --- LOGGING LOGIC ---
-                # Check for new objects (objects seen now that were not in the "active" set previously)
-                # Actually, user wants: if I stopped seeing it and it comes back, log it.
-                # The simple way: strictly check existence in previous frame vs current frame.
+                # Check for completely new objects that haven't been logged yet
 
-                new_ids = current_frame_ids - self.active_ids
+                # If you want to log ONLY once per session per ID:
+                new_ids = current_frame_ids - self.logged_ids
+
                 if new_ids:
-                    # Only print specifically what is new
+                    # Prepare list of labels for new IDs
+                    # We create separate strings for logging with ID and speaking just label
+
+                    log_entries = []
+                    speak_labels = []
+
+                    for uid in new_ids:
+                        label = id_to_label_map[uid]
+                        log_entries.append(f"{label} (ID: {uid})")
+                        speak_labels.append(label)
+
                     print(
-                        f"[TRACKING] Detected new/returning object(s) IDs: {list(new_ids)}"
+                        f"[TRACKING] Detected new object(s): {', '.join(log_entries)}"
                     )
 
-                # Update active set to current frame ONLY.
-                # Be careful: if tracking flickers, this logs frequently.
-                # But requirement is "if i stopped seeing it ... and then again".
-                # If tracker holds ID through occlusion, it won't disappear from 'online_targets' immediately.
+                    for label in speak_labels:
+                        if label is not None:
+                            driver_audio.speak(label)
+
+                    # Add to logged set so we don't spam print them
+                    self.logged_ids.update(new_ids)
+
+                # Update active set to current frame for other logic if needed
                 self.active_ids = current_frame_ids
 
                 # -------------------------
