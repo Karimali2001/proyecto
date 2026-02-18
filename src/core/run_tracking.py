@@ -3,18 +3,20 @@ import time
 from picamera2 import MappedArray
 import threading
 import numpy as np
-from types import SimpleNamespace  # Added for tracker config
-import sys  # Added for path adjustment if needed
-import os
-import inspect
+from types import SimpleNamespace
 import json
+from pathlib import Path
+import inspect
+from queue import Queue
 
-# Adjust path to find common if necessary, mirroring user provided snippet
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 from src.utils.byte_tracker import BYTETracker
 
 from .state import State
 from .error import ErrorState
+
+
+BASE_PATH = Path.cwd()
+TRANSLATIONS_PATH = Path(BASE_PATH / "assets/translations.json")
 
 
 class RunTracking(State):
@@ -24,18 +26,27 @@ class RunTracking(State):
         self.lock = threading.Lock()
 
         self.running = False
-        self.thread = None
+        self.inference_thread = None
+        self.audio_thread = None
 
         # Initialize Tracker
         tracker_args = SimpleNamespace(
-            track_thresh=0.5, track_buffer=30, match_thresh=0.8, mot20=False
+            track_thresh=0.4, track_buffer=60, match_thresh=0.7, mot20=False
         )
         self.tracker = BYTETracker(tracker_args)
         self.active_ids = set()  # To keep track of currently visible IDs for logging
         self.logged_ids = set()  # New set to remember what we have already logged
 
-        # Compatibilidad: algunas versiones aceptan update(dets), otras update(dets, img_info, img_size)
+        self.track_id_to_label_map = {}
+
+        self.translations_map = {}
+        with open(TRANSLATIONS_PATH, "r", encoding="utf-8") as f:
+            self.translations_map = json.load(f)
+
+        #
         self._tracker_update_uses_img_meta = self._detect_tracker_update_signature()
+
+        self.speak_labels_queue = Queue()
 
     def draw_detections_callback(self, request):
         """Esta función es llamada automáticamente por Picamera2 antes de mostrar cada frame."""
@@ -89,11 +100,21 @@ class RunTracking(State):
                 return self.tracker.update(dets_array, img_info, img_size)
             return self.tracker.update(dets_array)
 
+    def _announce_object_loop(self):
+
+        print(list(self.speak_labels_queue.queue))
+        driver_audio = self.context.audio_output_driver
+        if driver_audio is not None:
+            while True:
+                speak_label = self.speak_labels_queue.get()
+                driver_audio.speak("Encontré ")
+                print(f"[TRACKING] Hilo de audio hablando: {speak_label}")
+                driver_audio.speak(self.translations_map[speak_label])
+
     def _run_inference_loop(self):
 
         driver_cam = self.context.camera_driver
         driver_ai = self.context.hailo_driver
-        driver_audio = self.context.audio_output_driver
 
         while self.running:
             try:
@@ -178,6 +199,7 @@ class RunTracking(State):
                             final_tracks.append((label_str, bbox_int, t.score, tid))
                             current_frame_ids.add(tid)
                             id_to_label_map[tid] = label_str
+                            self.track_id_to_label_map[tid] = label_str
 
                 # --- LOGGING LOGIC ---
                 # Check for completely new objects that haven't been logged yet
@@ -192,18 +214,22 @@ class RunTracking(State):
                     log_entries = []
                     speak_labels = []
 
+                    # print(
+                    #     f"[TRACKING] current_frame_ids: {current_frame_ids}"
+                    #     f" logged_ids: {self.logged_ids}"
+                    #     f" new_ids: {new_ids}"
+                    # )
+
+                    # Find new labels to announce
                     for uid in new_ids:
                         label = id_to_label_map[uid]
-                        log_entries.append(f"{label} (ID: {uid})")
+                        log_entries.append(f" Found {label} (ID: {uid})")
                         speak_labels.append(label)
+                        self.speak_labels_queue.put(label)
 
                     print(
                         f"[TRACKING] Detected new object(s): {', '.join(log_entries)}"
                     )
-
-                    for label in speak_labels:
-                        if label is not None:
-                            driver_audio.speak(label)
 
                     # Add to logged set so we don't spam print them
                     self.logged_ids.update(new_ids)
@@ -217,9 +243,6 @@ class RunTracking(State):
                     # 4. ACTUALIZAR VARIABLE COMPARTIDA
                     # Esto es lo que lee la función 'draw_detections_callback'
                     self.current_detections = final_tracks
-
-                # remove the print loop to avoid spam, controlled by logging logic above
-                # if clean_detections: ...
 
                 if clean_detections:
                     pass  # handled above
@@ -235,8 +258,14 @@ class RunTracking(State):
 
         self.running = False
 
-        if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=1.0)
+        if (
+            self.inference_thread
+            and self.inference_thread.is_alive()
+            and self.audio_thread
+            and self.audio_thread.is_alive()
+        ):
+            self.inference_thread.join(timeout=1.0)
+            self.audio_thread.join(timeout=1.0)
 
         print("[TRACKING] Hilo detenido.")
 
@@ -256,8 +285,14 @@ class RunTracking(State):
 
         if not self.running:
             self.running = True
-            self.thread = threading.Thread(target=self._run_inference_loop, daemon=True)
-            self.thread.start()
+            self.inference_thread = threading.Thread(
+                target=self._run_inference_loop, daemon=True
+            )
+            self.audio_thread = threading.Thread(
+                target=self._announce_object_loop, daemon=True
+            )
+            self.inference_thread.start()
+            self.audio_thread.start()
         try:
             while self.running:
                 time.sleep(0.01)

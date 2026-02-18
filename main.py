@@ -2,10 +2,6 @@ import time
 import traceback
 
 
-# NO importes aquí arriba para probar
-# from src.core.context import Context
-# from src.core.init import InitState
-
 if __name__ == "__main__":
     print("[Main] Iniciando python...", flush=True)
     
