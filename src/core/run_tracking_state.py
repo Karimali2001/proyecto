@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import json
 from pathlib import Path
 import inspect
-from queue import Queue
+from queue import Queue, Empty
 
 from src.utils.byte_tracker import BYTETracker
 
 from .state import State
-from .error import ErrorState
+from .error_state import ErrorState
 
 
 BASE_PATH = Path.cwd()
@@ -102,14 +102,28 @@ class RunTracking(State):
 
     def _announce_object_loop(self):
 
-        print(list(self.speak_labels_queue.queue))
         driver_audio = self.context.audio_output_driver
         if driver_audio is not None:
-            while True:
-                speak_label = self.speak_labels_queue.get()
-                driver_audio.speak("Encontré ")
-                print(f"[TRACKING] Hilo de audio hablando: {speak_label}")
-                driver_audio.speak(self.translations_map[speak_label])
+            driver_audio.speak("Encontré ")
+
+            while self.running:
+                try:
+                    # Si no hay nada en la cola en 0.5 seg, lanza Empty y repite el bucle verificando self.running
+                    speak_label = self.speak_labels_queue.get(timeout=0.5)
+
+                    # Verificar de nuevo por si running cambió mientras esperábamos
+
+                    if speak_label is None or not self.running:
+                        break
+
+                    print(f"[TRACKING] Hilo de audio hablando: {speak_label}")
+                    driver_audio.speak(self.translations_map[speak_label])
+                except Empty:
+                    # Esto es NORMAL. Significa que no hay nada que decir por ahora.
+                    # Simplemente continuamos el bucle para verificar self.running de nuevo.
+                    continue
+                except Exception as e:
+                    print(f"[ERROR] Hilo de audio falló: {e}")
 
     def _run_inference_loop(self):
 
@@ -254,20 +268,34 @@ class RunTracking(State):
                 self.running = False
 
     def stop(self) -> None:
-        """Llamar a esto al salir del estado para limpiar"""
 
-        self.running = False
+        print("[TRACKING] Deteniendo estado...", flush=True)
+        self.running = False  # Bandera principal abajo
 
-        if (
-            self.inference_thread
-            and self.inference_thread.is_alive()
-            and self.audio_thread
-            and self.audio_thread.is_alive()
-        ):
-            self.inference_thread.join(timeout=1.0)
-            self.audio_thread.join(timeout=1.0)
+        # 1. Vaciar cola de audio para desbloquear el hilo si está esperando
+        # Importante: Poner un "poison pill" o simplemente vaciar
+        with self.speak_labels_queue.mutex:
+            self.speak_labels_queue.queue.clear()
+        self.speak_labels_queue.put(None)
 
-        print("[TRACKING] Hilo detenido.")
+        # 2. Detener Hilo de Audio
+        if self.audio_thread and self.audio_thread.is_alive():
+            print("[TRACKING] Esperando a que muera hilo de audio...", flush=True)
+            self.audio_thread.join(timeout=10.0)
+            if self.audio_thread.is_alive():
+                print("[TRACKING] ALERTA: Hilo de audio no murió a tiempo.", flush=True)
+
+        # 4. Detener Hilo de Inferencia
+        if self.inference_thread and self.inference_thread.is_alive():
+            print("[TRACKING] Esperando a que muera hilo de inferencia...", flush=True)
+            self.inference_thread.join()
+            if self.inference_thread.is_alive():
+                print(
+                    "[TRACKING] ALERTA: Hilo de inferencia no murió a tiempo.",
+                    flush=True,
+                )
+
+        print("[TRACKING] Estado detenido completamente.", flush=True)
 
     def process(self) -> None:
         """Método principal del estado (Hilo Principal)."""

@@ -31,6 +31,8 @@ class CameraDriver:
     def stop(self):
         try:
             self.picam2.stop()
+            self.picam2.stop_preview() # Cierra la ventana QT
+            print("CameraDriver: Camera stopped.", flush=True)
         except Exception as e:
             print(f"Error stopping camera: {e}")
 

@@ -8,7 +8,7 @@ if __name__ == "__main__":
     try:
         print("[Main] Importando dependencias...", flush=True)
         from src.core.context import Context
-        from src.core.init import InitState
+        from src.core.init_state import InitState
         print("[Main] Importaciones listas. Iniciando App...", flush=True)
 
         context = Context(InitState())
