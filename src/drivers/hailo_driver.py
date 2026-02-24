@@ -2,7 +2,7 @@ from picamera2.devices import Hailo
 import numpy as np
 
 class HailoDriver:
-    def __init__(self, model_path: str, labels_path: str, threshold: float = 0.5):
+    def __init__(self, model_path: str, labels_path: str, threshold: float = 0.8):
         self.model_path = model_path
         self.labels_path = labels_path
         self.threshold = threshold
@@ -37,7 +37,7 @@ class HailoDriver:
             return []
         return self.device.run(frame)
 
-    def extract_detections(self, hailo_output, video_w, video_h):
+    def extract_detections(self, hailo_output, video_w, video_h, ):
         """
         Parses raw Hailo output into a list of (class_name, bbox, score).
         bbox is (x0, y0, x1, y1)
