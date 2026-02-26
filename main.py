@@ -4,10 +4,12 @@ import json
 from queue import Queue
 from pathlib import Path
 from threading import Thread
+import time
 
 
 from src.drivers.hailo_driver import HailoDriver
 from src.drivers.camera_driver import CameraDriver
+from src.drivers.tof import TofDriver
 
 base_path = Path.cwd()
 
@@ -104,12 +106,44 @@ def object_detection_thread():
             break
 
 
+def detect_hole_thread(self):
+    try:
+        tof = TofDriver()
+
+        detected = False
+
+        while True:
+            matrix = tof.get_matrix()
+            if matrix is not None:
+                """
+                *************************
+                Hole
+                *************************
+                """
+                is_hole, pos_hole = tof.detect_hole(matrix)
+
+                if is_hole and not detected:
+                    detected = True
+
+                    detectionsQueue.put("¡Cuidado! Hay un agujero: " + pos_hole)
+
+                    time.sleep(2)
+                elif not is_hole:
+                    detected = False
+
+            time.sleep(0.005)
+    except Exception as e:
+        print(f"[Tof] Error: {e}")
+
+
 if __name__ == "__main__":
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(target=object_detection_thread, daemon=True)
+    t_tof = Thread(target=detect_hole_thread, daemon=True)
 
     t_audio.start()
     t_camera.start()
+    t_tof.start()
 
     try:
         while True:

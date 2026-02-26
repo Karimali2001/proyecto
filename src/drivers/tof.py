@@ -36,10 +36,20 @@
 import qwiic_vl53l5cx
 import time
 import numpy as np
+import math
+
+from .audio_output_driver import AudioOutputDriver
+
+
+audio = AudioOutputDriver()
 
 
 class TofDriver:
-    def __init__(self):
+    def __init__(self, baseline_floor=14000, angle_grad=45):
+        """
+        baseline_floor: Distance in millimeters from the sensor to the floor.
+        angle_grad: Angle in degrees from the sensor to the floor.
+        """
         print("[Tof] Initializing Tof")
 
         # Create instance of device
@@ -56,6 +66,8 @@ class TofDriver:
         if not self.sensor.begin():
             raise RuntimeError("[Tof] Sensor initialization unsuccessful.")
 
+        audio.speak("Sensor de distancia inicializado")
+
         self.sensor.set_resolution(8 * 8)  # enable all 64 pads
         # image_resolution = self.sensor.get_resolution()  # Query sensor for current resolution - either 4x4 or 8x8
 
@@ -63,7 +75,11 @@ class TofDriver:
         self.sensor.start_ranging()
 
         # distance of the sensor to the ground
-        self.baseline_floor = None
+        angle_rad = math.radians(angle_grad)
+
+        hip = baseline_floor / math.cos(angle_rad)
+
+        self.baseline_floor = hip
 
         print("[ToF] Sensor listo y capturando datos.")
 
@@ -88,11 +104,12 @@ class TofDriver:
         Analyzes the top rows (0 and 1) to detect sudden drops.
         Returns (Boolean, Position)
         """
+
         # 1. Filter out zeros (errors/infinite) to calculate the normal floor
         valid_readings = [dist for row in matrix[0:2] for dist in row if dist > 0]
 
         if not valid_readings:
-            return True, "front (total drop to infinity)"
+            return True, "frente completo"
 
         current_distance = sum(valid_readings) / len(valid_readings)
 
@@ -105,10 +122,15 @@ class TofDriver:
         difference = current_distance - self.baseline_floor
 
         if difference > 300:
+            print(
+                f"[Tof] Detected a drop! Current: {current_distance:.1f}mm, Baseline: {self.baseline_floor:.1f}mm, Difference: {difference:.1f}mm"
+            )
+
+            print("[Tof] Matrix: ", matrix)
             # HOLE! Combine pixels from Row 0 and Row 1 for greater precision
-            left_pixels = matrix[0][0:3] + matrix[1][0:3]
-            center_pixels = matrix[0][3:5] + matrix[1][3:5]
-            right_pixels = matrix[0][5:8] + matrix[1][5:8]
+            left_pixels = list(matrix[0][0:3]) + list(matrix[1][0:3])
+            center_pixels = list(matrix[0][3:5]) + list(matrix[1][3:5])
+            right_pixels = list(matrix[0][5:8]) + list(matrix[1][5:8])
 
             # Treat zeros as infinite (e.g., 4000mm) for hole calculation
             left_pixels = [4000 if v == 0 else v for v in left_pixels]
@@ -127,10 +149,10 @@ class TofDriver:
                 and avg_center > danger_threshold
                 and avg_right > danger_threshold
             ):
-                return True, "full front (total drop)"
+                return True, "frente completo (caída total)"
 
             # Find the deepest zone
-            zones = {"left": avg_left, "center": avg_center, "right": avg_right}
+            zones = {"izquierda": avg_left, "medio": avg_center, "derecha": avg_right}
             dangerous_zones = {k: v for k, v in zones.items() if v > danger_threshold}
 
             if dangerous_zones:
@@ -138,7 +160,7 @@ class TofDriver:
                 return True, position
 
         # 4. Smoothly update the baseline if everything is normal
-        self.baseline_floor = (self.baseline_floor * 0.9) + (current_distance * 0.1)
+        # self.baseline_floor = (self.baseline_floor * 0.9) + (current_distance * 0.1)
         return False, ""
 
     def detect_air_obstacle(self, matrix):
@@ -152,15 +174,15 @@ class TofDriver:
         right_danger = False
 
         # Check first 3 rows
-        for x in range(3):
-            for y in range(8):
-                distance = matrix[x, y]
+        for row in range(3):
+            for col in range(8):
+                distance = matrix[row, col]
 
                 # 0 is an error/infinite or the object is less than 1500mm
                 if 0 < distance < 1500:
-                    if x <= 2:
+                    if col <= 2:
                         left_danger = True
-                    elif x >= 5:
+                    elif col >= 5:
                         right_danger = True
                     else:
                         center_danger = True
@@ -191,26 +213,51 @@ class TofDriver:
         elif right_danger:
             return True, "derecha"
 
+        return False, ""
+
 
 if __name__ == "__main__":
     try:
         tof = TofDriver()
+
         detected = False
 
         while True:
             matrix = tof.get_matrix()
             if matrix is not None:
-                tof.detect_hole(matrix)
-                # isAirObstacleDetected, pos = tof.detect_air_obstacle(matrix)
+                """
+                *************************
+                Hole
+                *************************
+                """
+                is_hole, pos_hole = tof.detect_hole(matrix)
 
-                # if isAirObstacleDetected and not detected:
+                if is_hole and not detected:
+                    detected = True
+                    print("[Main]: Hole detected at position:", pos_hole)
+
+                    audio.speak("¡Cuidado! Hay un agujero: " + pos_hole)
+
+                    time.sleep(2)
+                elif not is_hole:
+                    detected = False
+
+                """
+                *************************
+                Air obstacle
+                *************************
+                """
+
+                # isAirObstacle, pos_air = tof.detect_air_obstacle(matrix)
+
+                # if isAirObstacle and not detected:
                 #     detected = True
                 #     print("[Main]: Air obstacle detected")
                 #     time.sleep(2)
-                # elif not isAirObstacleDetected:
+                # elif not isAirObstacle:
                 #     detected = False
 
-            time.sleep(2)
+            time.sleep(0.005)
     except KeyboardInterrupt:
         print("[Tof]: Program stopped")
     except Exception as e:
