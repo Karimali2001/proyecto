@@ -5,6 +5,7 @@ from queue import Queue
 from pathlib import Path
 from threading import Thread
 import time
+import random
 
 
 from src.drivers.hailo_driver import HailoDriver
@@ -106,7 +107,23 @@ def object_detection_thread():
             break
 
 
-def detect_hole_thread(self):
+def object_detection_thread_dummy():
+
+    global last_detection
+
+    dummy = ["carro a las 12", "persona a las 7", "vaso a las 5"]
+
+    while True:
+        try:
+            last_detection = [random.choice(dummy)]
+            time.sleep(10)
+            pass
+        except Exception as e:
+            print(f"\n[Object Detection] Error: {e}")
+            break
+
+
+def detect_hole_thread():
     try:
         tof = TofDriver()
 
@@ -123,11 +140,9 @@ def detect_hole_thread(self):
                 is_hole, pos_hole = tof.detect_hole(matrix)
 
                 if is_hole and not detected:
-                    detected = True
-
                     detectionsQueue.put("¡Cuidado! Hay un agujero: " + pos_hole)
-
-                    time.sleep(2)
+                    time.sleep(4)
+                    detected = True
                 elif not is_hole:
                     detected = False
 
@@ -138,7 +153,7 @@ def detect_hole_thread(self):
 
 if __name__ == "__main__":
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
-    t_camera = Thread(target=object_detection_thread, daemon=True)
+    t_camera = Thread(target=object_detection_thread_dummy, daemon=True)
     t_tof = Thread(target=detect_hole_thread, daemon=True)
 
     t_audio.start()

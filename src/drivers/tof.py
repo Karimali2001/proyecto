@@ -179,7 +179,7 @@ class TofDriver:
                 distance = matrix[row, col]
 
                 # 0 is an error/infinite or the object is less than 1500mm
-                if 0 < distance < 1500:
+                if 0 < distance < 1000:
                     if col <= 2:
                         left_danger = True
                     elif col >= 5:
