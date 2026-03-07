@@ -21,6 +21,7 @@ class ImuDriver:
 
 while True:
     imu = ImuDriver()
+    time.sleep(1)  # Wait a moment for the sensor to initialize
     heading, roll, pitch = imu.getData()
 
     print(f"Compass: {heading:.2f}° | Pitch: {pitch:.2f}° | Roll: {roll:.2f}°")

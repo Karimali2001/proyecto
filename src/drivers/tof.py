@@ -224,38 +224,39 @@ if __name__ == "__main__":
 
         while True:
             matrix = tof.get_matrix()
-            if matrix is not None:
-                """
-                *************************
-                Hole
-                *************************
-                """
-                is_hole, pos_hole = tof.detect_hole(matrix)
+            print("[Tof] Distance Matrix (mm):\n", matrix)
+            # if matrix is not None:
+            #     """
+            #     *************************
+            #     Hole
+            #     *************************
+            #     """
+            #     is_hole, pos_hole = tof.detect_hole(matrix)
 
-                if is_hole and not detected:
-                    detected = True
-                    print("[Main]: Hole detected at position:", pos_hole)
+            #     if is_hole and not detected:
+            #         detected = True
+            #         print("[Main]: Hole detected at position:", pos_hole)
 
-                    audio.speak("¡Cuidado! Hay un agujero: " + pos_hole)
+            #         audio.speak("¡Cuidado! Hay un agujero: " + pos_hole)
 
-                    time.sleep(2)
-                elif not is_hole:
-                    detected = False
+            #         time.sleep(2)
+            #     elif not is_hole:
+            #         detected = False
 
-                """
-                *************************
-                Air obstacle
-                *************************
-                """
+            #     """
+            #     *************************
+            #     Air obstacle
+            #     *************************
+            #     """
 
-                # isAirObstacle, pos_air = tof.detect_air_obstacle(matrix)
+            #     # isAirObstacle, pos_air = tof.detect_air_obstacle(matrix)
 
-                # if isAirObstacle and not detected:
-                #     detected = True
-                #     print("[Main]: Air obstacle detected")
-                #     time.sleep(2)
-                # elif not isAirObstacle:
-                #     detected = False
+            #     # if isAirObstacle and not detected:
+            #     #     detected = True
+            #     #     print("[Main]: Air obstacle detected")
+            #     #     time.sleep(2)
+            #     # elif not isAirObstacle:
+            #     #     detected = False
 
             time.sleep(0.005)
     except KeyboardInterrupt:
