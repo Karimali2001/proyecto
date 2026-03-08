@@ -58,4 +58,6 @@ Consistency: Do not mix languages in the codebase.
 
 ---
 
+- Always use pathlib for file paths to ensure cross-platform compatibility.
+
 **Review and update this file as the project evolves.**

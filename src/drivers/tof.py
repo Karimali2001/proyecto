@@ -66,7 +66,9 @@ class TofDriver:
         if not self.sensor.begin():
             raise RuntimeError("[Tof] Sensor initialization unsuccessful.")
 
-        audio.speak("Sensor de distancia inicializado")
+        # audio.speak("Sensor de distancia inicializado")
+
+        print("[Tof] Initialized sensor")
 
         self.sensor.set_resolution(8 * 8)  # enable all 64 pads
         # image_resolution = self.sensor.get_resolution()  # Query sensor for current resolution - either 4x4 or 8x8
@@ -156,7 +158,7 @@ class TofDriver:
             dangerous_zones = {k: v for k, v in zones.items() if v > danger_threshold}
 
             if dangerous_zones:
-                position = max(dangerous_zones, key=dangerous_zones.get)
+                position = max(dangerous_zones, key=dangerous_zones.get)  # type: ignore
                 return True, position
 
         # 4. Smoothly update the baseline if everything is normal
@@ -224,7 +226,9 @@ if __name__ == "__main__":
 
         while True:
             matrix = tof.get_matrix()
-            print("[Tof] Distance Matrix (mm):\n", matrix)
+            if matrix is not None:
+                print(matrix)
+
             # if matrix is not None:
             #     """
             #     *************************
