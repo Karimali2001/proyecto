@@ -153,12 +153,12 @@ def detect_hole_thread():
 
 if __name__ == "__main__":
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
-    t_camera = Thread(target=object_detection_thread_dummy, daemon=True)
-    t_tof = Thread(target=detect_hole_thread, daemon=True)
+    t_camera = Thread(target=object_detection_thread, daemon=True)
+    # t_tof = Thread(target=detect_hole_thread, daemon=True)
 
     t_audio.start()
     t_camera.start()
-    t_tof.start()
+    # t_tof.start()
 
     try:
         while True:
