@@ -10,7 +10,7 @@ import random
 
 from src.drivers.hailo_driver import HailoDriver
 from src.drivers.camera_driver import CameraDriver
-from src.drivers.tof import TofDriver
+from src.core.ObstacleDetector import ObstacleDetector
 
 base_path = Path.cwd()
 
@@ -125,19 +125,19 @@ def object_detection_thread_dummy():
 
 def detect_hole_thread():
     try:
-        tof = TofDriver()
+        obstacleDetector = ObstacleDetector()
 
         detected = False
 
         while True:
-            matrix = tof.get_matrix()
+            matrix = obstacleDetector.tof.get_matrix()
             if matrix is not None:
                 """
                 *************************
                 Hole
                 *************************
                 """
-                is_hole, pos_hole = tof.detect_hole(matrix)
+                is_hole, pos_hole = obstacleDetector.detect_hole(matrix)
 
                 if is_hole and not detected:
                     detectionsQueue.put("¡Cuidado! Hay un agujero: " + pos_hole)
