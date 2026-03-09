@@ -1,10 +1,13 @@
-from src.drivers.tof_driver import Tof
 import time
 
 
+from src.drivers.tof_driver import Tof
+
+
 class ObstacleDetector:
-    def __init__(self):
+    def __init__(self, detectionsQueue):
         self.tof = Tof()
+        self.detectionsQueue = detectionsQueue
 
     def detect_hole(self, matrix):
         """
@@ -21,16 +24,16 @@ class ObstacleDetector:
         current_distance = sum(valid_readings) / len(valid_readings)
 
         # 2. Initialize the baseline if it's the first time
-        if self.baseline_floor is None:
-            self.baseline_floor = current_distance
+        if self.tof.baseline_floor is None:
+            self.tof.baseline_floor = current_distance
             return False, ""
 
         # 3. Detection logic: If the general distance jumps more than 30cm
-        difference = current_distance - self.baseline_floor
+        difference = current_distance - self.tof.baseline_floor
 
         if difference > 300:
             print(
-                f"[Tof] Detected a drop! Current: {current_distance:.1f}mm, Baseline: {self.baseline_floor:.1f}mm, Difference: {difference:.1f}mm"
+                f"[Tof] Detected a drop! Current: {current_distance:.1f}mm, Baseline: {self.tof.baseline_floor:.1f}mm, Difference: {difference:.1f}mm"
             )
 
             print("[Tof] Matrix: ", matrix)
@@ -48,7 +51,7 @@ class ObstacleDetector:
             avg_center = sum(center_pixels) / len(center_pixels)
             avg_right = sum(right_pixels) / len(right_pixels)
 
-            danger_threshold = self.baseline_floor + 300
+            danger_threshold = self.tof.baseline_floor + 300
 
             # Check if ALL zones exceeded the threshold (Total drop)
             if (
@@ -66,9 +69,35 @@ class ObstacleDetector:
                 position = max(dangerous_zones, key=dangerous_zones.get)  # type: ignore
                 return True, position
 
-        # 4. Smoothly update the baseline if everything is normal
-        # self.baseline_floor = (self.baseline_floor * 0.9) + (current_distance * 0.1)
         return False, ""
+
+    def detect_hole_thread(self):
+        try:
+            detected = False
+
+            while True:
+                matrix = self.tof.get_matrix()
+                
+                if matrix is not None:
+                    """
+                    *************************
+                    Hole
+                    *************************
+                    """
+                    is_hole, pos_hole = self.detect_hole(matrix)
+
+                    if is_hole and not detected:
+                        self.detectionsQueue.put(
+                            "¡Cuidado! Hay un agujero: " + pos_hole
+                        )
+                        time.sleep(4)
+                        detected = True
+                    elif not is_hole:
+                        detected = False
+
+                time.sleep(0.005)
+        except Exception as e:
+            print(f"[Tof] Error: {e}")
 
     def detect_air_obstacle(self, matrix):
         """
@@ -121,50 +150,3 @@ class ObstacleDetector:
             return True, "derecha"
 
         return False, ""
-
-
-if __name__ == "__main__":
-    try:
-        obstacleDetector = ObstacleDetector()
-
-        detected = False
-
-        while True:
-            matrix = obstacleDetector.tof.get_matrix()
-
-            if matrix is not None:
-                """
-                *************************
-                Hole
-                *************************
-                """
-                is_hole, pos_hole = obstacleDetector.detect_hole(matrix)
-
-                if is_hole and not detected:
-                    detected = True
-                    print("[Main]: Hole detected at position:", pos_hole)
-
-                    time.sleep(2)
-                elif not is_hole:
-                    detected = False
-
-            #     """
-            #     *************************
-            #     Air obstacle
-            #     *************************
-            #     """
-
-            #     # isAirObstacle, pos_air = obstacleDetector.tof.detect_air_obstacle(matrix)
-
-            #     # if isAirObstacle and not detected:
-            #     #     detected = True
-            #     #     print("[Main]: Air obstacle detected")
-            #     #     time.sleep(2)
-            #     # elif not isAirObstacle:
-            #     #     detected = False
-
-            time.sleep(0.005)
-    except KeyboardInterrupt:
-        print("[Tof]: Program stopped")
-    except Exception as e:
-        print(f"[Tof] Error: {e}")
