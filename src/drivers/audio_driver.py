@@ -12,7 +12,7 @@ BASE_DIRECTORY = Path.cwd()
 MODEL_PATH = BASE_DIRECTORY / "assets/es_MX-claude-high.onnx"
 
 
-class AudioOutputDriver:
+class Audio:
     def __init__(self, sample_rate=44100):
         # Initialize mixer of pygame in stereo mode (2 channels)
         pygame.mixer.pre_init(sample_rate, -16, 2, 512)
@@ -110,7 +110,7 @@ class AudioOutputDriver:
 
 
 if __name__ == "__main__":
-    audio = AudioOutputDriver()
+    audio = Audio()
 
     time.sleep(1)
     audio.play_spatial_sound("left")

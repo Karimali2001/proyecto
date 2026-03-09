@@ -1,27 +1,37 @@
+import time
+
 from queue import Queue
 from threading import Thread
 
 
 from src.core.object_detector import ObjectDetector
 from src.core.obstacle_detector import ObstacleDetector
+from src.core.menu_controller import MenuController
+from src.drivers.audio_driver import Audio
 
 
-detectionsQueue = Queue()
+audio_queue = Queue()
 
 
 def audio_consumer_thread():
     """This is the only thread aloud to speak"""
     """"Consumes text from the queue that needs to be logged"""
 
+    audio = Audio()
+
     while True:
-        message = detectionsQueue.get()
+        message = audio_queue.get()
         print([f"\n[Simulated Audio] Playing: {message}"])
-        detectionsQueue.task_done()
+        audio.speak(message)
+
+        audio_queue.task_done()
 
 
 if __name__ == "__main__":
     object_detector = ObjectDetector()
-    obstacle_detector = ObstacleDetector(detectionsQueue)
+    obstacle_detector = ObstacleDetector(audio_queue)
+
+    menuController = MenuController(object_detector, audio_queue)
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(target=object_detector.object_detection_thread, daemon=True)
@@ -33,13 +43,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            input("[Main] Press ENTER to detect objects")
-
-            if len(object_detector.getLastDetection()) == 0:
-                detectionsQueue.put("Camino Despejado")
-            else:
-                complete_frase = ",".join(object_detector.getLastDetection())
-                detectionsQueue.put(complete_frase)
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("[Main] Stopped Main")

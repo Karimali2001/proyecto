@@ -38,10 +38,10 @@ import time
 import numpy as np
 import math
 
-from .audio_output_driver import AudioOutputDriver
+from src.drivers.audio_driver import Audio
 
 
-audio = AudioOutputDriver()
+audio = Audio()
 
 
 class Tof:
