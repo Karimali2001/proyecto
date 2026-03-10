@@ -6,9 +6,9 @@ from src.core.priority_queue import AudioPriorityQueue
 
 
 class ObstacleDetector:
-    def __init__(self, detectionsQueue):
+    def __init__(self, audio_queue):
         self.tof = Tof()
-        self.detectionsQueue = detectionsQueue
+        self.audio_queue = audio_queue
 
     def detect_hole(self, matrix):
         """
@@ -24,15 +24,15 @@ class ObstacleDetector:
 
         current_distance = sum(valid_readings) / len(valid_readings)
 
-        # 2. Initialize the baseline if it's the first time
-        if self.tof.baseline_floor is None:
-            self.tof.baseline_floor = current_distance
-            return False, ""
-
-        # 3. Detection logic: If the general distance jumps more than 30cm
+        # 2. Compare against autocalibrated baseline and variability
         difference = current_distance - self.tof.baseline_floor
 
-        if difference > 300:
+        # 3. Detection logic: Trigger only if drop exceeds the sensor's calculated noise/variability plus 30cm
+        dynamic_threshold = (
+            self.tof.variability + 300
+        )  # Baseline jitter + 30cm actual drop
+
+        if difference > dynamic_threshold:
             print(
                 f"[Tof] Detected a drop! Current: {current_distance:.1f}mm, Baseline: {self.tof.baseline_floor:.1f}mm, Difference: {difference:.1f}mm"
             )
@@ -52,7 +52,7 @@ class ObstacleDetector:
             avg_center = sum(center_pixels) / len(center_pixels)
             avg_right = sum(right_pixels) / len(right_pixels)
 
-            danger_threshold = self.tof.baseline_floor + 300
+            danger_threshold = self.tof.baseline_floor + dynamic_threshold
 
             # Check if ALL zones exceeded the threshold (Total drop)
             if (
@@ -78,7 +78,7 @@ class ObstacleDetector:
 
             while True:
                 matrix = self.tof.get_matrix()
-                
+
                 if matrix is not None:
                     """
                     *************************
@@ -88,8 +88,27 @@ class ObstacleDetector:
                     is_hole, pos_hole = self.detect_hole(matrix)
 
                     if is_hole and not detected:
-                        self.detectionsQueue.put(AudioPriorityQueue.HOLE_DETECTION,
-                            "¡Cuidado! Hay un agujero: " + pos_hole
+                        sound_position = "center"
+                        if "izquierda" in pos_hole:
+                            sound_position = "left"
+                        elif "derecha" in pos_hole:
+                            sound_position = "right"
+
+                        # Dump as JSON String
+                        # Uses lower frequencies for holes vs higher frequencies for obstacles
+                        import json
+
+                        cmd = json.dumps(
+                            {
+                                "position": sound_position,
+                                "frequencyCenter": 400,
+                                "frequencySide": 300,
+                            }
+                        )
+
+                        self.audio_queue.put(
+                            AudioPriorityQueue.HOLE_DETECTION,
+                            cmd,
                         )
                         time.sleep(4)
                         detected = True

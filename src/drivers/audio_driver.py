@@ -42,13 +42,13 @@ class Audio:
         stereo_audio = np.column_stack((audio, audio))
         return pygame.sndarray.make_sound(stereo_audio)
 
-    def play_spatial_sound(self, position="center"):
+    def play_spatial_sound(self, position="center", frequencyCenter=880, frequencySide=500):
         """
         Plays an alert sound and sends it to the indicated speaker.
         """
         if position == "center":
             # HOLLOW TONE: Higher, longer, and louder (Imminent Danger)
-            sound = self.generate_beep(frequency=880, duration=0.3, volume=0.9)
+            sound = self.generate_beep(frequency=frequencyCenter, duration=0.3, volume=0.7)
             channel = sound.play()
             if channel:
                 channel.set_volume(1.0, 1.0)  # Left and Right at maximum
@@ -56,7 +56,7 @@ class Audio:
 
         elif position == "left":
             # LEFT OBSTACLE TONE: Medium frequency
-            sound = self.generate_beep(frequency=500, duration=0.15, volume=0.7)
+            sound = self.generate_beep(frequency=frequencySide, duration=0.15, volume=0.7)
             channel = sound.play()
             if channel:
                 channel.set_volume(1.0, 0.0)  # Left only
@@ -64,7 +64,7 @@ class Audio:
 
         elif position == "right":
             # RIGHT OBSTACLE TONE: Medium frequency
-            sound = self.generate_beep(frequency=500, duration=0.15, volume=0.7)
+            sound = self.generate_beep(frequency=frequencySide, duration=0.15, volume=1.0)
             channel = sound.play()
             if channel:
                 channel.set_volume(0.0, 1.0)  # Right only

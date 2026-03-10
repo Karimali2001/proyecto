@@ -1,16 +1,15 @@
 import queue
-import time
 from threading import Lock
 
 
 class AudioPriorityQueue:
-    
     HOLE_DETECTION = 1
     AIR_OBSTACLE = 2
-    OBJECT_DETECTION = 3
-    TEXT_RECOGNITION = 3
-    GPS_NAVIGATION = 4
-    
+    VOICE_MENU = 3
+    OBJECT_DETECTION = 4
+    TEXT_RECOGNITION = 4
+    GPS_NAVIGATION = 5
+
     def __init__(self, audio_driver):
         """
         Initializes the priority queue with an audio driver.

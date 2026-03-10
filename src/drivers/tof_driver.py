@@ -49,6 +49,7 @@ class Tof:
 
         # Create instance of device
         self.sensor = qwiic_vl53l5cx.QwiicVL53L5CX()
+        self.variability = 0.0
 
         # Check if it's connected
         if not self.sensor.is_connected():
