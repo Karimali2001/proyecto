@@ -1,5 +1,6 @@
 from gpiozero import Button
 import time
+import difflib
 
 
 from src.ui.voice_interface import VoiceInterface
@@ -61,12 +62,89 @@ class MenuController:
         current_time = time.time()
 
         if current_time - self.last_both_pressed > 0.5:
-            # Start the STT process
-
-            text_command = self.voice_interface.listen_and_recognize()
-
-            if text_command:
-                # For now, just print the result or send to the audio queue to repeat it
-                print(f"[MenuController] Command received: {text_command}")
-
             self.last_both_pressed = current_time
+
+            # Loop to allow retrying if the command is not understood
+            while True:
+                text_command = self.voice_interface.listen_and_recognize()
+
+                # If timeout or nothing was recognized, just exit
+                if not text_command:
+                    print(
+                        "[MenuController] No voice detected or timeout reached. Exiting voice menu."
+                    )
+                    break
+
+                text_lower = text_command.lower().strip()
+                print(f"[MenuController] Processing command: '{text_lower}'")
+
+                # Define standard commands for difflib matching
+                standard_commands = [
+                    "menu",
+                    "cancela el viaje",
+                    "listame mis ubicaciones",
+                    "donde estoy",
+                ]
+
+                # 1. Check for dynamic commands first by prefix
+                if text_lower.startswith("llevame a"):
+                    destino = text_lower.replace("llevame a", "").strip()
+                    print(
+                        f"[MenuController] Acción detectada: Llevame a tal lugar. Destino: {destino}"
+                    )
+                    break
+                elif text_lower.startswith(
+                    "guarda la ubicacion como"
+                ) or text_lower.startswith("guarda la ubicación como"):
+                    nombre = (
+                        text_lower.replace("guarda la ubicacion como", "")
+                        .replace("guarda la ubicación como", "")
+                        .strip()
+                    )
+                    print(
+                        f"[MenuController] Acción detectada: Guarda la ubicación como. Nombre: {nombre}"
+                    )
+                    break
+
+                # 2. Check standard commands using difflib for fuzzy matching
+                matches = difflib.get_close_matches(
+                    text_lower, standard_commands, n=1, cutoff=0.6
+                )
+
+                if matches:
+                    best_match = matches[0]
+                    if best_match == "menu":
+                        print("[MenuController] Acción detectada: Menú")
+
+                        menu_text = (
+                            "Este es el menú de ayuda. Puedes decir los siguientes comandos. "
+                            "Número uno. Di Menú. para listar qué puedo hacer por ti. "
+                            "Número dos. Di Llévame a. seguido de un lugar para iniciar la navegación. "
+                            "Número tres. Di Cancela el viaje. para detener tu navegación actual. "
+                            "Número cuatro. Di Guarda la ubicación como. seguido de un nombre para guardar el lugar donde estás. "
+                            "Número cinco. Di Lístame mis ubicaciones. para escuchar tus lugares guardados. "
+                            "Número seis. Di Dónde estoy. para conocer tu posición actual en el mapa. "
+                            "Para continuar. vuelve a presionar los botones y di un comando."
+                        )
+
+                        self.audio_queue.put(self.audio_queue.VOICE_MENU, menu_text)
+
+                    elif best_match == "cancela el viaje":
+                        print("[MenuController] Acción detectada: Cancela el viaje")
+                    elif best_match == "listame mis ubicaciones":
+                        print(
+                            "[MenuController] Acción detectada: Listame mis ubicaciones"
+                        )
+                    elif best_match == "donde estoy":
+                        print("[MenuController] Acción detectada: Donde estoy")
+
+                    break  # Command understood, exit the loop
+                else:
+                    print(
+                        "[MenuController] Comando no reconocido, pidiendo repetición."
+                    )
+                    self.audio_queue.put(
+                        self.audio_queue.VOICE_MENU,
+                        "No te entendí. Por favor, repite el comando.",
+                    )
+                    # Looping back to listen again
