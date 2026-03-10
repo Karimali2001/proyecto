@@ -2,6 +2,7 @@ import time
 
 
 from src.drivers.tof_driver import Tof
+from src.core.priority_queue import AudioPriorityQueue
 
 
 class ObstacleDetector:
@@ -87,7 +88,7 @@ class ObstacleDetector:
                     is_hole, pos_hole = self.detect_hole(matrix)
 
                     if is_hole and not detected:
-                        self.detectionsQueue.put(
+                        self.detectionsQueue.put(AudioPriorityQueue.HOLE_DETECTION,
                             "¡Cuidado! Hay un agujero: " + pos_hole
                         )
                         time.sleep(4)

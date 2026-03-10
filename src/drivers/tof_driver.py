@@ -38,11 +38,6 @@ import time
 import numpy as np
 import math
 
-from src.drivers.audio_driver import Audio
-
-
-audio = Audio()
-
 
 class Tof:
     def __init__(self, baseline_floor=14000, angle_grad=45):
@@ -65,8 +60,6 @@ class Tof:
         print("Initializing sensor board. This can take up to 10s. Please wait.")
         if not self.sensor.begin():
             raise RuntimeError("[Tof] Sensor initialization unsuccessful.")
-
-        # audio.speak("Sensor de distancia inicializado")
 
         print("[Tof] Initialized sensor")
 

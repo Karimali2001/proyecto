@@ -3,6 +3,7 @@ import subprocess
 import time
 import pygame
 import numpy as np
+import threading
 
 
 # RUTA AL BINARIO DE PIPER
@@ -18,6 +19,8 @@ class Audio:
         pygame.mixer.pre_init(sample_rate, -16, 2, 512)
         pygame.mixer.init()
         self.sample_rate = sample_rate
+        self.current_process = None  # Track piper process
+        self.stop_flag = False
 
     def generate_beep(self, frequency=150, duration=0.4, volume=0.8):
         """Generates a beep sound with a 'hollow' body using a square wave and fade-out"""
@@ -69,6 +72,9 @@ class Audio:
 
     def speak(self, text, length_scale="1.0"):
 
+        # Reset stop flag
+        self.stop_flag = False
+
         if not Path(PIPER_PATH).exists():
             print(f"[ERROR]: No se encontró el binario de Piper en: {PIPER_PATH}")
             return
@@ -90,8 +96,13 @@ class Audio:
             f"--output_file {temp_wav} 2>/dev/null"
         )
 
-        # We run Piper (blocks until the .wav file is ready)
-        subprocess.run(command, shell=True)
+        # We run Piper (blocks until the .wav file is ready or terminated)
+        self.current_process = subprocess.Popen(command, shell=True)
+        self.current_process.communicate()  # Wait for it to finish
+        self.current_process = None
+
+        if self.stop_flag:
+            return  # Abort if preempted during generation
 
         # Let Pygame speak!
         try:
@@ -101,12 +112,27 @@ class Audio:
             # Play it (Pygame automatically adjusts to I2S format)
             voice.play()
 
-            # Keep the script alive until the voice finishes
+            # Keep the script alive until the voice finishes or is preempted
             while pygame.mixer.get_busy():
+                if self.stop_flag:
+                    break
                 time.sleep(0.1)
 
         except Exception as e:
             print(f"[ERROR] Pygame failed to play the voice: {e}")
+
+    def stop(self):
+        """Stops the current playback and TTS generation."""
+        self.stop_flag = True
+        pygame.mixer.stop()
+        if self.current_process is not None:
+            self.current_process.terminate()
+
+    def speak_thread(self):
+        self.speak(
+            "Sistema de audio. Sin avisos de error y funcionando en estéreo.",
+            "1.0",
+        )
 
 
 if __name__ == "__main__":
@@ -122,9 +148,13 @@ if __name__ == "__main__":
     audio.play_spatial_sound("center")
 
     time.sleep(1)
-    audio.speak(
-        "Sistema de audio. Sin avisos de error y funcionando en estéreo.",
-        "1.0",
-    )
+
+    t_speak = threading.Thread(target=audio.speak_thread, daemon=True)
+
+    t_speak.start()
+
+    input("Press any button to stop audio")
+
+    audio.stop()
 
     time.sleep(2)  # Wait to let the audio finish before exiting

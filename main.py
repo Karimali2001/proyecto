@@ -8,23 +8,21 @@ from src.core.object_detector import ObjectDetector
 from src.core.obstacle_detector import ObstacleDetector
 from src.core.menu_controller import MenuController
 from src.drivers.audio_driver import Audio
+from src.core.priority_queue import AudioPriorityQueue
 
 
-audio_queue = Queue()
+audio = Audio()
+audio_queue = AudioPriorityQueue(audio)
 
 
 def audio_consumer_thread():
     """This is the only thread aloud to speak"""
     """"Consumes text from the queue that needs to be logged"""
 
-    audio = Audio()
-
     while True:
-        message = audio_queue.get()
-        print([f"\n[Simulated Audio] Playing: {message}"])
+        priority, message = audio_queue.get()
+        print(f"\n[Simulated Audio] Playing Priority {priority}: {message}")
         audio.speak(message)
-
-        audio_queue.task_done()
 
 
 if __name__ == "__main__":
