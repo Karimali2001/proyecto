@@ -9,14 +9,11 @@ from src.ui.voice_interface import VoiceInterface
 
 
 class MenuController:
-    def __init__(
-        self, object_detector, audio_queue, ocr_driver=None
-    ):
+    def __init__(self, object_detector, audio_queue, ocr_driver=None):
 
         self.object_detector = object_detector
         self.audio_queue = audio_queue
         self.ocr_driver = ocr_driver
-
 
         # Initialize Voice Interface for STT commands
         self.voice_interface = VoiceInterface(audio_queue)
@@ -174,6 +171,6 @@ class MenuController:
                     )
                     self.audio_queue.put(
                         self.audio_queue.VOICE_MENU,
-                        "No te entendí. Por favor, repite el comando.",
+                        "No te entendí. Vuelve a intentarlo presionando los dos botones.",
                     )
-                    # Looping back to listen again
+                    break  # Exit after one attempt to avoid infinite loop in case of unrecognized commands
