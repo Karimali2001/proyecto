@@ -2,13 +2,25 @@ import time
 import json
 
 from threading import Thread
+from pathlib import Path
 
 
 from src.core.object_detector import ObjectDetector
 from src.core.obstacle_detector import ObstacleDetector
 from src.core.menu_controller import MenuController
+from src.core.paddle_ocr import OCRDriver
 from src.drivers.audio_driver import Audio
 from src.core.priority_queue import AudioPriorityQueue
+from src.drivers.camera_driver import CameraDriver
+from src.drivers.hailo_driver import HailoDriver
+
+base_path = Path.cwd()
+
+
+model_path = str(base_path / "assets" / "yolov8s.hef")
+labels_path = str(base_path / "assets" / "coco.txt")
+
+video_w, video_h = 1280, 960
 
 
 audio = Audio()
@@ -51,10 +63,33 @@ def audio_consumer_thread():
 
 
 if __name__ == "__main__":
-    object_detector = ObjectDetector()
+    # ******** Initializing hailo and camera
+    try:
+        camera_driver = CameraDriver()
+        hailo_driver = HailoDriver(model_path, labels_path)
+
+        hailo_driver.start()
+
+        model_h, model_w, _ = hailo_driver.get_input_shape()
+
+        camera_driver.configure(video_w, video_h, model_w, model_h)
+
+        camera_driver.start()
+    except Exception as e:
+        print(f"[Main]: Error initializing camera and model: {e}")
+
+    object_detector = ObjectDetector(camera_driver, hailo_driver)
     # obstacle_detector = ObstacleDetector(audio_queue)
 
-    menuController = MenuController(object_detector, audio_queue)
+    try:
+        ocr_driver = OCRDriver(
+            camera_driver, det_model_path=str(base_path / "assets" / "ocr_det.hef")
+        )
+    except Exception as e:
+        print(f"[Main]: Error initializing OCR: {e}")
+        ocr_driver = None
+
+    menuController = MenuController(object_detector, audio_queue, ocr_driver)
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(target=object_detector.object_detection_thread, daemon=True)

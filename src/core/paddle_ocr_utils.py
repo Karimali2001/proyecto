@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from db_postprocess import DBPostProcess
+from src.core.db_postprocess import DBPostProcess
 
 
 def resize_heatmap_to_original(

@@ -4,7 +4,7 @@ import sys
 import cv2
 import time
 import pytesseract
-import re  # <-- Added Regex library
+import re
 from pathlib import Path
 from loguru import logger
 import queue
@@ -12,7 +12,9 @@ import queue
 # Adjust this path if necessary so it finds Hailo utilities
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from common.hailo_inference import HailoInfer
-from paddle_ocr_utils import det_postprocess
+from src.core.paddle_ocr_utils import det_postprocess
+
+from src.drivers.camera_driver import CameraDriver
 
 
 class OCRDriver:
@@ -21,8 +23,9 @@ class OCRDriver:
     and Tesseract for text recognition in Spanish.
     """
 
-    def __init__(self, det_model_path="assets/ocr_det.hef"):
+    def __init__(self, camera_driver, det_model_path="assets/ocr_det.hef"):
         self.det_model_path = det_model_path
+        self.camera_driver = camera_driver
 
         logger.info("[OCRDriver] Initializing Hailo chip for text detection...")
         try:
@@ -44,6 +47,30 @@ class OCRDriver:
         resized_frame = cv2.resize(frame, (self.model_width, self.model_height))
         rgb_frame = cv2.cvtColor(resized_frame, cv2.COLOR_BGR2RGB)
         return [rgb_frame]
+
+    def capture_and_read(self, stream_name="lores"):
+        """
+        Captures a frame from the camera, saves it for debugging,
+        and processes it to read text.
+        """
+        if not self.camera_driver:
+            return "Cámara no inicializada."
+
+        frame = self.camera_driver.capture_array(stream_name=stream_name)
+        if frame is None:
+            return "No se pudo capturar la imagen."
+
+        try:
+            frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        except Exception:
+            frame_bgr = frame
+
+        # Save the captured image for review
+        save_path = "assets/captured_ocr.jpg"
+        cv2.imwrite(save_path, frame_bgr)
+        logger.info(f"[OCRDriver] Image saved to {save_path} for review.")
+
+        return self.read_text(frame_bgr)
 
     def _clean_text(self, text):
         """
@@ -167,17 +194,32 @@ class OCRDriver:
 
 
 if __name__ == "__main__":
+    # 1. Instantiate the camera
+    camera_driver = CameraDriver()
+
+    # 2. Configure and start the camera
+    # Using 640x640 for the model size since that's what the Hailo model expects
+    camera_driver.configure(video_w=1280, video_h=960, model_w=640, model_h=640)
+    camera_driver.start(preview=False)
+
+    # Wait a tiny bit for the camera sensor to warm up and adjust exposure
+    time.sleep(1)
+
     if not Path("assets/ocr_det.hef").exists():
         print("Missing ocr_det.hef model.")
         sys.exit(1)
 
-    ocr = OCRDriver(det_model_path="assets/ocr_det.hef")
-    test_image = "assets/resena.jpg"
+    ocr = OCRDriver(camera_driver, det_model_path="assets/ocr_det.hef")
 
-    if Path(test_image).exists():
-        frame = cv2.imread(test_image)
-        print("\n--- INITIATING READING ---")
-        result = ocr.read_text(frame)
-        print(f"\n[Karim would say]: {result}\n")
+    print("\n--- INITIATING READING ---")
 
+    # 3. Capture the frame from the camera
+    frame = camera_driver.capture_array(stream_name="lores")
+
+    # 4. Pass the frame to the OCR driver
+    result = ocr.read_text(frame)
+    print(f"\n[Karim would say]: {result}\n")
+
+    # 5. Clean up
     ocr.close()
+    camera_driver.stop()

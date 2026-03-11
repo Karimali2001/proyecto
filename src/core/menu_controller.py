@@ -9,10 +9,14 @@ from src.ui.voice_interface import VoiceInterface
 
 
 class MenuController:
-    def __init__(self, object_detector, audio_queue):
+    def __init__(
+        self, object_detector, audio_queue, ocr_driver=None
+    ):
 
         self.object_detector = object_detector
         self.audio_queue = audio_queue
+        self.ocr_driver = ocr_driver
+
 
         # Initialize Voice Interface for STT commands
         self.voice_interface = VoiceInterface(audio_queue)
@@ -56,6 +60,31 @@ class MenuController:
 
         if self.btn_2.is_pressed:
             print("[Btn2] Read text")
+            if self.ocr_driver:
+                detected_text = self.ocr_driver.capture_and_read(stream_name="lores")
+
+                if detected_text and detected_text not in [
+                    "Error de hardware.",
+                    "No encontré ningún texto en la imagen.",
+                    "Cámara no inicializada.",
+                    "No se pudo capturar la imagen.",
+                ]:
+                    self.audio_queue.put(
+                        self.audio_queue.TEXT_RECOGNITION, detected_text
+                    )
+                elif detected_text == "No encontré ningún texto en la imagen.":
+                    self.audio_queue.put(
+                        self.audio_queue.TEXT_RECOGNITION, "No encontré texto"
+                    )
+                else:
+                    self.audio_queue.put(
+                        self.audio_queue.TEXT_RECOGNITION,
+                        "Hubo un error al leer el texto",
+                    )
+            else:
+                self.audio_queue.put(
+                    self.audio_queue.TEXT_RECOGNITION, "Lector de texto no inicializado"
+                )
 
     def both_btns_pressed(self):
 

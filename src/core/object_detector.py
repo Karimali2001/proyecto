@@ -1,45 +1,26 @@
 import json
 from pathlib import Path
 
-from src.drivers.hailo_driver import HailoDriver
-from src.drivers.camera_driver import CameraDriver
-
 base_path = Path.cwd()
 
-model_path = str(base_path / "assets" / "yolov8s.hef")
-labels_path = str(base_path / "assets" / "coco.txt")
 translations_path = str(base_path / "assets" / "translations.json")
 
 with open(translations_path, "r") as f:
     translations = json.load(f)
 
-video_w, video_h = 1280, 960
-
 
 class ObjectDetector:
-    def __init__(self):
-        
+    def __init__(self, camera_driver, hailo_driver, video_w=1280, video_h=960):
+        self.camera_driver = camera_driver
+        self.hailo_driver = hailo_driver
         self.last_detection = []
-        
+        self.video_w = video_w
+        self.video_h = video_h
+
     def getLastDetection(self):
         return self.last_detection
 
     def object_detection_thread(self):
-
-        # ******** Initializing hailo and camera
-        try:
-            camera = CameraDriver()
-            hailo = HailoDriver(model_path, labels_path)
-        except Exception as e:
-            print(f"[Main]: Error initializing camera and model: {e}")
-
-        hailo.start()
-
-        model_h, model_w, _ = hailo.get_input_shape()
-
-        camera.configure(video_w, video_h, model_w, model_h)
-
-        camera.start()
 
         # ****************
 
@@ -47,11 +28,13 @@ class ObjectDetector:
 
         while True:
             try:
-                frame = camera.capture_array()
+                frame = self.camera_driver.capture_array()
 
-                detections = hailo.infer(frame)
+                detections = self.hailo_driver.infer(frame)
 
-                detections = hailo.extract_detections(detections, video_w, video_h)
+                detections = self.hailo_driver.extract_detections(
+                    detections, self.video_w, self.video_h
+                )
 
                 objects_frame = []
 
@@ -67,7 +50,7 @@ class ObjectDetector:
                         x_center = (x0 + x1) / 2
 
                         # Calculate the where is the object in x in the screen (0.00-1.00)
-                        ratio = x_center / video_w
+                        ratio = x_center / self.video_w
 
                         # 9 cause we start from the left(9)
                         # 6 cause is the the difference between 9 and 6(right)
@@ -86,6 +69,6 @@ class ObjectDetector:
                 # if nothing is captured empty
                 self.last_detection = objects_frame
             except Exception as e:
-                camera.stop()
+                self.camera_driver.stop()
                 print(f"\n[Object Detection] Error: {e}")
                 break
