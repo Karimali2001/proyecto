@@ -3,6 +3,7 @@ venv/
 env/
 ENV/
 .venv/
+/assets/vosk-model-es-0.42/
 
 # Python
 __pycache__/
