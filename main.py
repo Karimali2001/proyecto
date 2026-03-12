@@ -13,6 +13,8 @@ from src.drivers.audio_driver import Audio
 from src.core.priority_queue import AudioPriorityQueue
 from src.drivers.camera_driver import CameraDriver
 from src.drivers.hailo_driver import HailoDriver
+from src.core.navigation import Navigation
+
 
 base_path = Path.cwd()
 
@@ -89,15 +91,21 @@ if __name__ == "__main__":
         print(f"[Main]: Error initializing OCR: {e}")
         ocr_driver = None
 
-    menuController = MenuController(object_detector, audio_queue, ocr_driver)
+    navigation = Navigation()
+
+    menuController = MenuController(
+        object_detector, navigation, audio_queue, ocr_driver
+    )
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(target=object_detector.object_detection_thread, daemon=True)
     # t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
+    t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
 
     t_audio.start()
     t_camera.start()
     # t_tof.start()
+    t_navigation.start()
 
     try:
         while True:

@@ -15,7 +15,7 @@ class VoiceInterface:
         self.audio_queue = audio_queue
         self.recognizer = sr.Recognizer()
 
-        self.recognizer.pause_threshold = 0.8
+        self.recognizer.pause_threshold = 0.5
         self.recognizer.energy_threshold = 400
         self.recognizer.dynamic_energy_threshold = False
 
@@ -63,7 +63,7 @@ class VoiceInterface:
             try:
                 # Capture the audio (stops if user stops talking, or forcefully after 7 seconds)
                 audio_data = self.recognizer.listen(
-                    source, timeout=5, phrase_time_limit=7
+                    source, timeout=5, phrase_time_limit=5
                 )
 
                 # Save the captured audio to a file for debugging purposes

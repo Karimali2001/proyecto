@@ -9,11 +9,18 @@ from src.ui.voice_interface import VoiceInterface
 
 
 class MenuController:
-    def __init__(self, object_detector, audio_queue, ocr_driver=None):
+    def __init__(
+        self,
+        object_detector,
+        navigation,
+        audio_queue,
+        ocr_driver=None,
+    ):
 
         self.object_detector = object_detector
         self.audio_queue = audio_queue
         self.ocr_driver = ocr_driver
+        self.navigation = navigation
 
         # Initialize Voice Interface for STT commands
         self.voice_interface = VoiceInterface(audio_queue)
@@ -163,6 +170,12 @@ class MenuController:
                         )
                     elif best_match == "donde estoy":
                         print("[MenuController] Acción detectada: Donde estoy")
+
+                        ubication_message = self.navigation.get_where_am_i_message()
+
+                        self.audio_queue.put(
+                            self.audio_queue.NAVIGATION, ubication_message
+                        )
 
                     break  # Command understood, exit the loop
                 else:

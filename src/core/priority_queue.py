@@ -8,7 +8,7 @@ class AudioPriorityQueue:
     VOICE_MENU = 3
     OBJECT_DETECTION = 4
     TEXT_RECOGNITION = 4
-    GPS_NAVIGATION = 5
+    NAVIGATION = 5
 
     def __init__(self, audio_driver):
         """
