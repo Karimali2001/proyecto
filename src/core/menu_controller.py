@@ -14,12 +14,12 @@ class MenuController:
         object_detector,
         navigation,
         audio_queue,
-        ocr_driver=None,
+        ocr,
     ):
 
         self.object_detector = object_detector
         self.audio_queue = audio_queue
-        self.ocr_driver = ocr_driver
+        self.ocr = ocr
         self.navigation = navigation
 
         # Initialize Voice Interface for STT commands
@@ -64,8 +64,8 @@ class MenuController:
 
         if self.btn_2.is_pressed:
             print("[Btn2] Read text")
-            if self.ocr_driver:
-                detected_text = self.ocr_driver.capture_and_read(stream_name="lores")
+            if self.ocr:
+                detected_text = self.ocr.capture_and_read(stream_name="main")
 
                 if detected_text and detected_text not in [
                     "Error de hardware.",

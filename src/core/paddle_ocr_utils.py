@@ -91,7 +91,7 @@ def get_cropped_text_images(
             box[:, 1] -= y
 
             mask = np.zeros((h, w), dtype=np.uint8)
-            cv2.fillPoly(mask, [box], 255)
+            cv2.fillPoly(mask, [box], 255)  # type: ignore
             cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
 
             # Optionally: rectify to rectangle

@@ -1,9 +1,17 @@
 from picamera2 import Picamera2
+from libcamera import controls  # type: ignore
 
 
 class CameraDriver:
-    def __init__(self):
-        self.picam2 = Picamera2()
+    def __init__(self, camera_num=0, enable_af=False):
+        """
+        camera_num: Index of the camera to use (default is 0).
+        enable_af: Boolean to enable autofocus (default is False).
+        """
+
+        self.picam2 = Picamera2(camera_num=camera_num)
+        self.enable_af = enable_af
+
         self.video_size = (1280, 960)  # Default video size
         self.model_size = (640, 640)  # Default, gets overwritten
 
@@ -13,17 +21,26 @@ class CameraDriver:
 
         main = {"size": self.video_size, "format": "XRGB8888"}
         lores = {"size": self.model_size, "format": "RGB888"}
-        controls = {"FrameRate": 30}
+
+        cam_controls = {"FrameRate": 30}
+
+        if self.enable_af:
+            # Set autofocus mode to Auto (AfMode 0) in the configuration if autofocus is enabled
+            cam_controls["AfMode"] = controls.AfModeEnum.Auto
 
         config = self.picam2.create_preview_configuration(
-            main, lores=lores, controls=controls
+            main, lores=lores, controls=cam_controls
         )
+
+        self.picam2.configure(config)
         self.picam2.configure(config)
 
     def start(self, preview=True):
         try:
             self.picam2.start()
+
             print("Camera started.")
+
         except Exception as e:
             print(f"Error starting camera: {e}")
 
@@ -41,3 +58,19 @@ class CameraDriver:
     def set_callback(self, callback_func):
         """Sets the callback for drawing/processing on the main thread loop (preview)"""
         self.picam2.pre_callback = callback_func
+
+    def trigger_autofocus(self):
+        """Triggers the autofocus cycle if enabled."""
+        if self.enable_af:
+            print("--> Triggering autofocus cycle...")
+            try:
+                # This replaces time.sleep(3). It waits only as long as necessary.
+                success = self.picam2.autofocus_cycle()
+                if success:
+                    print("--> Perfect focus achieved!")
+                else:
+                    print(
+                        "--> Warning: The lens did not achieve perfect focus, capturing anyway."
+                    )
+            except Exception as e:
+                print(f"Error triggering autofocus: {e}")

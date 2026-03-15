@@ -9,8 +9,12 @@ from src.drivers.imu_driver import ImuDriver
 class Navigation:
     def __init__(self):
 
-        self.gps = GPS()
-        self.imu = ImuDriver()
+        try:
+            self.gps = GPS()
+            self.imu = ImuDriver()
+
+        except Exception as e:
+            print(f"Error initializing GPS or IMU: {e}")
 
         self.latitude = 0.0
         self.longitude = 0.0
@@ -154,6 +158,21 @@ class Navigation:
                 return f"Perdí la señal del GPS hace unos segundos. Tu última ubicación conocida fue en {direction}"
             else:
                 return f"No tengo señal actual. Hace {minutes} minutos estabas cerca de {direction}"
+
+    def start_navigation(self, target_lat, target_lon, target_name="tu destino"):
+        pass
+
+    def cancel_navigation(self):
+        pass
+
+    def save_current_location(self, name):
+        pass
+
+    def list_saved_locations(self):
+        pass
+
+    def delete_saved_location(self, name):
+        pass
 
 
 if __name__ == "__main__":
