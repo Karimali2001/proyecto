@@ -3,7 +3,7 @@ import threading
 import requests
 
 from src.drivers.gps_driver import GPS
-from src.drivers.imu_driver import ImuDriver
+
 
 
 class Navigation:
@@ -11,7 +11,7 @@ class Navigation:
 
         try:
             self.gps = GPS()
-            self.imu = ImuDriver()
+
 
         except Exception as e:
             print(f"Error initializing GPS or IMU: {e}")
@@ -40,10 +40,10 @@ class Navigation:
                     self.latitude = lat
                     self.longitude = lon
 
-            compass, pitch, roll = self.imu.getData()
-            if compass is not None:
-                self.compass = compass
-            time.sleep(3)  # Update every 3 seconds
+            # compass, pitch, roll = self.imu.getData()
+            # if compass is not None:
+            #     self.compass = compass
+            # time.sleep(3)  # Update every 3 seconds
 
     def get_address_from_coordinates(self, lat, lon):
         try:

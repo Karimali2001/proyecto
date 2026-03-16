@@ -1,5 +1,5 @@
 from picamera2 import Picamera2
-from libcamera import controls  # type: ignore
+from libcamera import controls, Transform  # type: ignore
 
 
 class CameraDriver:
@@ -11,6 +11,7 @@ class CameraDriver:
 
         self.picam2 = Picamera2(camera_num=camera_num)
         self.enable_af = enable_af
+        self.camera_num = camera_num
 
         self.video_size = (1280, 960)  # Default video size
         self.model_size = (640, 640)  # Default, gets overwritten
@@ -28,8 +29,14 @@ class CameraDriver:
             # Set autofocus mode to Auto (AfMode 0) in the configuration if autofocus is enabled
             cam_controls["AfMode"] = controls.AfModeEnum.Auto
 
+        if self.camera_num == 1:
+            # For 64mp camera, we need to flip the image due to the physical orientation of the sensor
+            cam_transform = Transform(hflip=True, vflip=True)
+        else:
+            cam_transform = Transform()
+
         config = self.picam2.create_preview_configuration(
-            main, lores=lores, controls=cam_controls
+            main, lores=lores, controls=cam_controls, transform=cam_transform
         )
 
         self.picam2.configure(config)
