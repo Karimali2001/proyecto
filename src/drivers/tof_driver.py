@@ -1,115 +1,117 @@
 #!/usr/bin/env python
-# -------------------------------------------------------------------------------
-# qwiic_vl53l5cx_ex1_distance_array.py
-#
-# This example shows how to read all 64 distance readings at once.
-# -------------------------------------------------------------------------------
-# Written by SparkFun Electronics, November 2024
-#
-# This python library supports the SparkFun Electroncis Qwiic ecosystem
-#
-# More information on Qwiic is at https://www.sparkfun.com/qwiic
-#
-# Do you like this library? Help support SparkFun. Buy a board!
-# ===============================================================================
-# Copyright (c) 2024 SparkFun Electronics
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
-# ===============================================================================
-
 import qwiic_vl53l5cx
 import time
 import numpy as np
-import math
+import warnings
 
 
 class Tof:
-    def __init__(self, baseline_floor=14000, angle_grad=45):
-        """
-        baseline_floor: Distance in millimeters from the sensor to the floor.
-        angle_grad: Angle in degrees from the sensor to the floor.
-        """
-        print("[Tof] Initializing Tof")
-
-        # Create instance of device
+    def __init__(self, sensor_height_mm=1220):
+        print("[Tof] Initializando Tof en modo 8x8 (Seguro)...")
         self.sensor = qwiic_vl53l5cx.QwiicVL53L5CX()
 
-        self.variability = 0.0
+        self.sensor_height_mm = sensor_height_mm
 
-        # Check if it's connected
         if not self.sensor.is_connected():
-            raise RuntimeError(
-                "[Tof] The device isn't connected to the system. Please check your connection"
-            )
+            raise RuntimeError("[Tof] El dispositivo no está conectado.")
 
-        # Initialize the device
-        print("Initializing sensor board. This can take up to 10s. Please wait.")
+        print("Iniciando sensor VL53L5CX...")
         if not self.sensor.begin():
-            raise RuntimeError("[Tof] Sensor initialization unsuccessful.")
+            raise RuntimeError("[Tof] Falló la inicialización.")
 
-        print("[Tof] Initialized sensor")
+        # Volvemos a la configuración 8x8 que ya sabemos que funciona perfecto
+        self.sensor.set_resolution(self.sensor.kResolution8x8)
+        self.sensor.set_target_order(self.sensor.kTargetOrderClosest)
+        self.sensor.set_ranging_frequency_hz(5)
+        self.sensor.set_integration_time_ms(150)
+        self.sensor.set_sharpener_percent(50)
 
-        self.sensor.set_resolution(8 * 8)  # enable all 64 pads
-        # image_resolution = self.sensor.get_resolution()  # Query sensor for current resolution - either 4x4 or 8x8
-
-        # image_width = int(sqrt(image_resolution)) # Calculate printing width
         self.sensor.start_ranging()
 
-        # distance of the sensor to the ground
-        angle_rad = math.radians(angle_grad)
-
-        hip = baseline_floor / math.cos(angle_rad)
-
-        self.baseline_floor = hip
-
-        print("[ToF] Sensor listo y capturando datos.")
-
     def get_matrix(self):
-        """Devuelve una matriz 2D (8x8) con las distancias en milímetros."""
+        if self.sensor.check_data_ready():
+            measurement_data = self.sensor.get_ranging_data()
 
-        sensor = self.sensor
+            # Extraemos los 64 valores
+            flat_distance = measurement_data.distance_mm
+            flat_status = measurement_data.target_status
 
-        if sensor.check_data_ready():
-            measurement_data = sensor.get_ranging_data()
-            flat_array = measurement_data.distance_mm
+            dist_matrix = np.array(flat_distance).reshape((8, 8))
+            status_matrix = np.array(flat_status).reshape((8, 8))
 
-            # Transform list to array 8x8
-            matrix = np.array(flat_array).reshape((8, 8))
-
-            return matrix
-
+            mask = np.isin(status_matrix, [5, 9])
+            return np.where(mask, dist_matrix, 0)
         return None
+
+    def get_stable_matrix(self, frames=15):
+        samples = []
+        for _ in range(frames):
+            matrix = None
+            while matrix is None:
+                matrix = self.get_matrix()
+                time.sleep(0.01)
+            samples.append(matrix)
+            time.sleep(0.05)
+
+        stack = np.array(samples, dtype=float)
+        stack[stack == 0] = np.nan
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            stable = np.nanmedian(stack, axis=0)
+
+        return np.nan_to_num(stable, nan=0.0)
 
 
 if __name__ == "__main__":
     try:
-        tof = Tof()
+        tof = Tof(sensor_height_mm=770)
 
-        detected = False
+        print("\n" + "=" * 50)
+        print("SISTEMA DE DETECCIÓN DE ALTURA EXACTA (8x8)")
+        print("=" * 50 + "\n")
 
         while True:
-            matrix = tof.get_matrix()
-            if matrix is not None:
-                print(matrix)
+            # PASO 1
+            input(
+                "1. Asegúrate de que NO HAY NADA (solo piso vacío) y presiona ENTER..."
+            )
+            print("Escaneando el suelo...", end="", flush=True)
+            floor_matrix = tof.get_stable_matrix()
+            print(" ¡Guardado!\n")
 
-            time.sleep(0.005)
+            # PASO 2
+            input("2. Pon el libro de 25cm y presiona ENTER...")
+            print("Escaneando el objeto...", end="", flush=True)
+            obj_matrix = tof.get_stable_matrix()
+            print(" ¡Guardado!\n")
+
+            # CÁLCULO MÁGICO PER-PÍXEL (Matriz 8x8)
+            height_matrix = np.zeros((8, 8))
+            valid_mask = (floor_matrix > 0) & (obj_matrix > 0)
+
+            H = tof.sensor_height_mm
+            height_matrix[valid_mask] = H * (
+                1.0 - (obj_matrix[valid_mask] / floor_matrix[valid_mask])
+            )
+
+            print("--- MATRIZ DE ALTURA DEL OBJETO (cm reales) ---")
+            matrix_en_cm = np.round(height_matrix / 10.0, 1)
+            print(matrix_en_cm)
+
+            píxeles_validos = matrix_en_cm[matrix_en_cm > 5.0]
+
+            print("\n" + "=" * 50)
+            if len(píxeles_validos) > 0:
+                altura_estimada = np.max(píxeles_validos)
+                print(f"=> ALTURA DEL OBSTÁCULO: {altura_estimada} cm")
+            else:
+                print("=> NO SE DETECTÓ NINGÚN OBSTÁCULO.")
+            print("=" * 50 + "\n")
+
+            input("Presiona ENTER para probar de nuevo...")
+
     except KeyboardInterrupt:
-        print("[Tof]: Program stopped")
+        print("\n[Tof]: Programa detenido.")
     except Exception as e:
-        print(f"[Tof] Error: {e}")
+        print(f"\n[Tof] Error: {e}")

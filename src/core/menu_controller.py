@@ -13,11 +13,13 @@ class MenuController:
         self,
         object_detector,
         navigation,
+        obstacle_detector,
         audio_queue,
         ocr,
     ):
 
         self.object_detector = object_detector
+        self.obstacle_detector = obstacle_detector
         self.audio_queue = audio_queue
         self.ocr = ocr
         self.navigation = navigation
@@ -117,6 +119,7 @@ class MenuController:
                     "cancela el viaje",
                     "listame mis ubicaciones",
                     "donde estoy",
+                    "calibrar",
                 ]
 
                 # 1. Check for dynamic commands first by prefix
@@ -157,6 +160,7 @@ class MenuController:
                             "Número cuatro. Di Guarda la ubicación como. seguido de un nombre para guardar el lugar donde estás. "
                             "Número cinco. Di Lístame mis ubicaciones. para escuchar tus lugares guardados. "
                             "Número seis. Di Dónde estoy. para conocer tu posición actual en el mapa. "
+                            "Número siete. Di Calibrar. para ajustar el sensor a tu postura y altura actual. "
                             "Para continuar. vuelve a presionar los botones y di un comando."
                         )
 
@@ -176,8 +180,25 @@ class MenuController:
                         self.audio_queue.put(
                             self.audio_queue.NAVIGATION, ubication_message
                         )
+                    elif best_match == "calibrar":
+                        print("[MenuController] Acción detectada: Calibrar")
+
+                        # 1. Avisamos al usuario que se quede quieto
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
+                        )
+
+                        self.obstacle_detector.recalibrate_sensor()
+
+                        # 2. Avisamos que terminó
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Calibración completada con éxito. Listo para caminar.",
+                        )
 
                     break  # Command understood, exit the loop
+
                 else:
                     print(
                         "[MenuController] Comando no reconocido, pidiendo repetición."

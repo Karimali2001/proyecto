@@ -87,7 +87,7 @@ if __name__ == "__main__":
         print(f"[Main]: Error initializing camera and model: {e}")
 
     object_detector = ObjectDetector(global_shutter_camera, hailo_driver)
-    # obstacle_detector = ObstacleDetector(audio_queue)
+    obstacle_detector = ObstacleDetector(audio_queue)
 
     try:
         ocr_driver = OCR(
@@ -101,17 +101,17 @@ if __name__ == "__main__":
     navigation = Navigation()
 
     menuController = MenuController(
-        object_detector, navigation, audio_queue, ocr_driver
+        object_detector, navigation, obstacle_detector, audio_queue, ocr_driver
     )
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(target=object_detector.object_detection_thread, daemon=True)
-    # t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
+    t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
     t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
 
     t_audio.start()
     t_camera.start()
-    # t_tof.start()
+    t_tof.start()
     t_navigation.start()
 
     try:

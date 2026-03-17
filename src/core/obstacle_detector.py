@@ -1,4 +1,6 @@
 import time
+import numpy as np
+import json
 
 
 from src.drivers.tof_driver import Tof
@@ -6,86 +8,90 @@ from src.core.priority_queue import AudioPriorityQueue
 
 
 class ObstacleDetector:
-    def __init__(self, audio_queue):
-        self.tof = Tof()
+    def __init__(self, audio_queue, sensor_height_mm=1220):
+        self.tof = Tof(sensor_height_mm=sensor_height_mm)
         self.audio_queue = audio_queue
+        self.floor_matrix = None
+        self.is_calibrating = False
+        self.recalibrate_sensor()
 
-    def detect_hole(self, matrix):
+    def recalibrate_sensor(self):
+        self.is_calibrating = True
+        time.sleep(0.1)
+        self.floor_matrix = self.tof.get_stable_matrix()
+        self.is_calibrating = False
+
+    def detect_hole(self, matrix_cm):
         """
-        Analyzes the top rows (0 and 1) to detect sudden drops.
-        Returns (Boolean, Position)
+        Analiza las filas inferiores (que apuntan a los pies) buscando caídas.
+        Filtra el ruido exigiendo que al menos 2 píxeles confirmen el hueco.
         """
+        zona_suelo = matrix_cm[5:8, :]
 
-        # 1. Filter out zeros (errors/infinite) to calculate the normal floor
-        valid_readings = [dist for row in matrix[0:2] for dist in row if dist > 0]
+        # Aumentamos a -15cm para ignorar desniveles normales del piso o ruido del sensor
+        umbral_peligro_cm = -15.0
 
-        if not valid_readings:
+        zona_izq = zona_suelo[:, 0:3]
+        zona_cen = zona_suelo[:, 3:5]
+        zona_der = zona_suelo[:, 5:8]
+
+        # En lugar de np.min() (que se asusta con 1 solo píxel malo),
+        # contamos CUÁNTOS píxeles están viendo el hueco en cada zona.
+        huecos_izq = np.sum(zona_izq <= umbral_peligro_cm)
+        huecos_cen = np.sum(zona_cen <= umbral_peligro_cm)
+        huecos_der = np.sum(zona_der <= umbral_peligro_cm)
+
+        hay_hueco = False
+        posiciones = []
+
+        # Solo disparamos la alarma si al menos 2 píxeles confirman el peligro
+        if huecos_izq >= 2:
+            hay_hueco = True
+            posiciones.append("izquierda")
+
+        if huecos_cen >= 2:
+            hay_hueco = True
+            posiciones.append("centro")
+
+        if huecos_der >= 2:
+            hay_hueco = True
+            posiciones.append("derecha")
+
+        if not hay_hueco:
+            return False, ""
+
+        if len(posiciones) == 3:
             return True, "frente completo"
 
-        current_distance = sum(valid_readings) / len(valid_readings)
-
-        # 2. Compare against autocalibrated baseline and variability
-        difference = current_distance - self.tof.baseline_floor
-
-        # 3. Detection logic: Trigger only if drop exceeds the sensor's calculated noise/variability plus 30cm
-        dynamic_threshold = (
-            self.tof.variability + 300
-        )  # Baseline jitter + 30cm actual drop
-
-        if difference > dynamic_threshold:
-            print(
-                f"[Tof] Detected a drop! Current: {current_distance:.1f}mm, Baseline: {self.tof.baseline_floor:.1f}mm, Difference: {difference:.1f}mm"
-            )
-
-            print("[Tof] Matrix: ", matrix)
-            # HOLE! Combine pixels from Row 0 and Row 1 for greater precision
-            left_pixels = list(matrix[0][0:3]) + list(matrix[1][0:3])
-            center_pixels = list(matrix[0][3:5]) + list(matrix[1][3:5])
-            right_pixels = list(matrix[0][5:8]) + list(matrix[1][5:8])
-
-            # Treat zeros as infinite (e.g., 4000mm) for hole calculation
-            left_pixels = [4000 if v == 0 else v for v in left_pixels]
-            center_pixels = [4000 if v == 0 else v for v in center_pixels]
-            right_pixels = [4000 if v == 0 else v for v in right_pixels]
-
-            avg_left = sum(left_pixels) / len(left_pixels)
-            avg_center = sum(center_pixels) / len(center_pixels)
-            avg_right = sum(right_pixels) / len(right_pixels)
-
-            danger_threshold = self.tof.baseline_floor + dynamic_threshold
-
-            # Check if ALL zones exceeded the threshold (Total drop)
-            if (
-                avg_left > danger_threshold
-                and avg_center > danger_threshold
-                and avg_right > danger_threshold
-            ):
-                return True, "frente completo (caída total)"
-
-            # Find the deepest zone
-            zones = {"izquierda": avg_left, "medio": avg_center, "derecha": avg_right}
-            dangerous_zones = {k: v for k, v in zones.items() if v > danger_threshold}
-
-            if dangerous_zones:
-                position = max(dangerous_zones, key=dangerous_zones.get)  # type: ignore
-                return True, position
-
-        return False, ""
+        return True, ", ".join(posiciones)
 
     def detect_hole_thread(self):
         try:
             detected = False
+            H = self.tof.sensor_height_mm
 
             while True:
-                matrix = self.tof.get_matrix()
+                if self.is_calibrating:
+                    time.sleep(0.1)
+                    continue
+                # 1. Obtenemos los milímetros crudos
+                current_matrix = self.tof.get_matrix()
 
-                if matrix is not None:
-                    """
-                    *************************
-                    Hole
-                    *************************
-                    """
-                    is_hole, pos_hole = self.detect_hole(matrix)
+                if current_matrix is not None:
+                    # 2. APLICAMOS LA MAGIA MATEMÁTICA
+                    height_matrix = np.zeros((8, 8))
+                    valid_mask = (self.floor_matrix > 0) & (current_matrix > 0)
+
+                    height_matrix[valid_mask] = H * (
+                        1.0
+                        - (current_matrix[valid_mask] / self.floor_matrix[valid_mask])
+                    )
+
+                    # 3. Lo convertimos a Centímetros Reales (que es lo que espera la función)
+                    matrix_cm = np.round(height_matrix / 10.0, 1)
+
+                    # 4. Ahora sí, pasamos la matriz de centímetros a la detección
+                    is_hole, pos_hole = self.detect_hole(matrix_cm)
 
                     if is_hole and not detected:
                         sound_position = "center"
@@ -93,10 +99,6 @@ class ObstacleDetector:
                             sound_position = "left"
                         elif "derecha" in pos_hole:
                             sound_position = "right"
-
-                        # Dump as JSON String
-                        # Uses lower frequencies for holes vs higher frequencies for obstacles
-                        import json
 
                         cmd = json.dumps(
                             {
