@@ -64,6 +64,16 @@ def audio_consumer_thread():
         audio_queue.task_done()
 
 
+def frame_producer_thread(camera_driver, object_detector):
+    """Continuously captures frames from the camera and processes them for object detection."""
+    while True:
+        frame = camera_driver.capture_array()
+        if frame is not None:
+            object_detector.process_frame(frame)
+            # Here you can add code to handle the detected objects, e.g., send them to the audio queue
+        time.sleep(0.1)  # Adjust sleep time as needed to control processing rate
+
+
 if __name__ == "__main__":
     # ******** Initializing hailo and camera
     try:
@@ -105,7 +115,11 @@ if __name__ == "__main__":
     )
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
-    t_camera = Thread(target=object_detector.object_detection_thread, daemon=True)
+    t_camera = Thread(
+        target=frame_producer_thread,
+        args=(global_shutter_camera, object_detector),
+        daemon=True,
+    )
     t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
     t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
 

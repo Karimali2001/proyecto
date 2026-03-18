@@ -132,22 +132,22 @@ if __name__ == "__main__":
 
     try:
         while True:
-            # location = gps.get_location()
+            location = gps.get_location()
 
-            heading = gps.get_heading()
+            # heading = gps.get_heading()
 
-            print(f"HEADING:   {heading:.2f}°")
-            time.sleep(0.5)  # Update every 0.5 seconds
+            # print(f"HEADING:   {heading:.2f}°")
+            # time.sleep(0.5)  # Update every 0.5 seconds
 
-            # if location:
-            #     lat, lon, sats, alt = location
+            if location:
+                lat, lon, sats, alt = location
 
-            #     print("-" * 40)
-            #     print(f"LATITUDE:  {lat:.6f}")
-            #     print(f"LONGITUDE: {lon:.6f}")
-            #     print(f"SATELLITES: {sats} | ALTITUDE: {alt}m")
-            #     # Fixed Google Maps URL format
-            #     print(f"MAP: https://www.google.com/maps?q={lat:.6f},{lon:.6f}")
+                print("-" * 40)
+                print(f"LATITUDE:  {lat:.6f}")
+                print(f"LONGITUDE: {lon:.6f}")
+                print(f"SATELLITES: {sats} | ALTITUDE: {alt}m")
+                # Fixed Google Maps URL format
+                print(f"MAP: https://www.google.com/maps?q={lat:.6f},{lon:.6f}")
 
     except KeyboardInterrupt:
         print("\nNavigation stopped.")

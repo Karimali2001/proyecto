@@ -20,55 +20,32 @@ class ObjectDetector:
     def getLastDetection(self):
         return self.last_detection
 
-    def object_detection_thread(self):
+    def process_frame(self, frame):
+        try:
+            detections = self.hailo_driver.infer(frame)
+            detections = self.hailo_driver.extract_detections(
+                detections, self.video_w, self.video_h
+            )
 
-        # ****************
+            objects_frame = []
 
-        # ******* Starting loop
+            if len(detections) != 0:
+                for detection in detections:
+                    name, bbox, score = detection
+                    x0, y0, x1, y1 = bbox
+                    x_center = (x0 + x1) / 2
+                    ratio = x_center / self.video_w
 
-        while True:
-            try:
-                frame = self.camera_driver.capture_array()
+                    hour = round(9 + (ratio * 6))
+                    if hour > 12:
+                        hour -= 12
 
-                detections = self.hailo_driver.infer(frame)
+                    translated_name = translations.get(name, name)
+                    message = f"{translated_name} a las {hour}"
+                    objects_frame.append(message)
 
-                detections = self.hailo_driver.extract_detections(
-                    detections, self.video_w, self.video_h
-                )
+            self.last_detection = objects_frame
 
-                objects_frame = []
-
-                if len(detections) != 0:
-                    for detection in detections:
-                        # Get all the data from the detection
-                        name, bbox, score = detection
-
-                        # Get the position of the detected object
-                        x0, y0, x1, y1 = bbox
-
-                        # Calculate the center of the object
-                        x_center = (x0 + x1) / 2
-
-                        # Calculate the where is the object in x in the screen (0.00-1.00)
-                        ratio = x_center / self.video_w
-
-                        # 9 cause we start from the left(9)
-                        # 6 cause is the the difference between 9 and 6(right)
-                        hour = round(9 + (ratio * 6))
-
-                        if hour > 12:
-                            hour -= 12
-
-                        translated_name = translations.get(name, name)
-
-                        message = f"{translated_name} a las {hour}"
-
-                        objects_frame.append(message)
-
-                # If Captured objects put last detection
-                # if nothing is captured empty
-                self.last_detection = objects_frame
-            except Exception as e:
-                self.camera_driver.stop()
-                print(f"\n[Object Detection] Error: {e}")
-                break
+        except Exception as e:
+            print(f"\n[Object Detection] Error: {e}")
+            self.last_detection = []
