@@ -151,6 +151,28 @@ class HailoDriver:
 
         return results
 
+    def extract_depth_map(self, hailo_output):
+        """
+        Extrae y da formato a la salida del modelo scdepthv3.
+        Retorna la matriz de profundidad 2D (256x320) lista para analizar.
+        """
+        if not hailo_output or len(hailo_output) == 0:
+            return None
+
+        try:
+            # En scdepthv3, la salida suele ser un solo array plano.
+            raw_depth = hailo_output[0]
+
+            # El modelo scdepthv3 de Hailo produce una matriz de 256x320
+            # Redimensionamos el array plano a la forma 2D correcta.
+            depth_array = np.array(raw_depth).reshape((256, 320))
+
+            return depth_array
+
+        except Exception as e:
+            print(f"[HailoDriver] Error procesando mapa de profundidad: {e}")
+            return None
+
     def stop(self):
         if self.device:
             self.device.close()

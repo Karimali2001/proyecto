@@ -14,11 +14,18 @@ class ObjectDetector:
         self.camera_driver = camera_driver
         self.hailo_driver = hailo_driver
         self.last_detection = []
+        self.raw_detections = []
         self.video_w = video_w
         self.video_h = video_h
 
     def getLastDetection(self):
         return self.last_detection
+
+    def getRawDetections(self):
+        return self.raw_detections
+
+    def setRawDetections(self, detections):
+        self.raw_detections = detections
 
     def process_frame(self, frame):
         try:
@@ -26,6 +33,8 @@ class ObjectDetector:
             detections = self.hailo_driver.extract_detections(
                 detections, self.video_w, self.video_h
             )
+
+            self.setRawDetections(detections)
 
             objects_frame = []
 
@@ -49,3 +58,4 @@ class ObjectDetector:
         except Exception as e:
             print(f"\n[Object Detection] Error: {e}")
             self.last_detection = []
+            self.setRawDetections([])

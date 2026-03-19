@@ -8,12 +8,14 @@ from src.core.priority_queue import AudioPriorityQueue
 
 
 class ObstacleDetector:
-    def __init__(self, audio_queue, sensor_height_mm=1220):
-        self.tof = Tof(sensor_height_mm=sensor_height_mm)
+    def __init__(self, audio_queue, sensor_height_mm=1220, ignore_tof=False):
+        self.ignore_tof = ignore_tof
+        self.tof = Tof(sensor_height_mm=sensor_height_mm) if not ignore_tof else None
         self.audio_queue = audio_queue
         self.floor_matrix = None
         self.is_calibrating = False
-        self.recalibrate_sensor()
+        if not ignore_tof:
+            self.recalibrate_sensor()
 
     def recalibrate_sensor(self):
         self.is_calibrating = True
@@ -66,6 +68,9 @@ class ObstacleDetector:
         return True, ", ".join(posiciones)
 
     def detect_hole_thread(self):
+        if self.ignore_tof:
+            return
+
         try:
             detected = False
             H = self.tof.sensor_height_mm
@@ -120,55 +125,3 @@ class ObstacleDetector:
                 time.sleep(0.005)
         except Exception as e:
             print(f"[Tof] Error: {e}")
-
-    def detect_air_obstacle(self, matrix):
-        """
-        Checks the upper rows (for the sensor facing upwards/forward).
-        If the distance is less than 1500mm (1.5 meters), it triggers an alert.
-        """
-
-        left_danger = False
-        center_danger = False
-        right_danger = False
-
-        # Check first 3 rows
-        for row in range(3):
-            for col in range(8):
-                distance = matrix[row, col]
-
-                # 0 is an error/infinite or the object is less than 1500mm
-                if 0 < distance < 1000:
-                    if col <= 2:
-                        left_danger = True
-                    elif col >= 5:
-                        right_danger = True
-                    else:
-                        center_danger = True
-
-        # boolean logic
-
-        if not (left_danger or center_danger or right_danger):
-            return False, ""
-
-        if left_danger and center_danger and right_danger:
-            return True, "pared"
-
-        elif left_danger and right_danger and not center_danger:
-            return True, "ambos lados"
-
-        elif left_danger and center_danger:
-            return True, "frente e izquierda"
-
-        elif right_danger and center_danger:
-            return True, "frente y derecha"
-
-        elif center_danger:
-            return True, "frente"
-
-        elif left_danger:
-            return True, "izquierda"
-
-        elif right_danger:
-            return True, "derecha"
-
-        return False, ""

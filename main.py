@@ -14,13 +14,18 @@ from src.core.priority_queue import AudioPriorityQueue
 from src.drivers.camera_driver import CameraDriver
 from src.drivers.hailo_driver import HailoDriver
 from src.core.navigation import Navigation
+from src.core.depth_detector import DepthDetector
 
 
 base_path = Path.cwd()
 
 
-model_path = str(base_path / "assets" / "yolov8s.hef")
+detection_model_path = str(base_path / "assets" / "yolov8s.hef")
 labels_path = str(base_path / "assets" / "coco.txt")
+
+ocr_det_model_path = str(base_path / "assets" / "ocr_det.hef")
+
+depth_model_path = str(base_path / "assets" / "scdepthv3.hef")
 
 video_w, video_h = 1280, 960
 
@@ -64,14 +69,24 @@ def audio_consumer_thread():
         audio_queue.task_done()
 
 
-def frame_producer_thread(camera_driver, object_detector):
-    """Continuously captures frames from the camera and processes them for object detection."""
+def frame_producer_thread(camera_driver, object_detector, depth_detector):
+
     while True:
-        frame = camera_driver.capture_array()
-        if frame is not None:
-            object_detector.process_frame(frame)
-            # Here you can add code to handle the detected objects, e.g., send them to the audio queue
-        time.sleep(0.1)  # Adjust sleep time as needed to control processing rate
+        try:
+            frame = camera_driver.capture_array()
+
+            if frame is not None:
+                # --- A: DETECCIÓN DE OBJETOS ---
+                object_detector.process_frame(frame)
+
+                raw_detections = object_detector.getRawDetections()
+
+                # --- B: DETECCIÓN DE PROFUNDIDAD ---
+                depth_detector.process_frame(frame, raw_detections)
+
+        except Exception as e:
+            print(f"[Vision Thread] Error: {e}")
+            break
 
 
 if __name__ == "__main__":
@@ -81,7 +96,7 @@ if __name__ == "__main__":
 
         owlsight64mp_camera = CameraDriver(camera_num=1, enable_af=True)
 
-        hailo_driver = HailoDriver(model_path, labels_path)
+        hailo_driver = HailoDriver(detection_model_path, labels_path)
 
         hailo_driver.start()
 
@@ -97,7 +112,7 @@ if __name__ == "__main__":
         print(f"[Main]: Error initializing camera and model: {e}")
 
     object_detector = ObjectDetector(global_shutter_camera, hailo_driver)
-    obstacle_detector = ObstacleDetector(audio_queue)
+    obstacle_detector = ObstacleDetector(audio_queue, ignore_tof=True)
 
     try:
         ocr_driver = OCR(
@@ -108,6 +123,21 @@ if __name__ == "__main__":
         print(f"[Main]: Error initializing OCR: {e}")
         ocr_driver = None
 
+    try:
+        depth_driver = HailoDriver(depth_model_path, labels_path="")
+        depth_driver.start()
+
+    except Exception as e:
+        print(f"[Main]: Error initializing Depth Model: {e}")
+        depth_driver = None
+
+    depth_detector = DepthDetector(
+        hailo_driver=depth_driver,
+        audio_queue=audio_queue,
+        user_height_mm=1400,
+        camera_height_mm=1100,
+    )
+
     navigation = Navigation()
 
     menuController = MenuController(
@@ -117,7 +147,7 @@ if __name__ == "__main__":
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(
         target=frame_producer_thread,
-        args=(global_shutter_camera, object_detector),
+        args=(global_shutter_camera, object_detector, depth_detector),
         daemon=True,
     )
     t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
