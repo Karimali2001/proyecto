@@ -6,7 +6,6 @@ from src.core.priority_queue import AudioPriorityQueue
 
 
 class DepthDetector:
-    # 🔥 VOLVIERON TUS MEDIDAS EXACTAS 🔥
     def __init__(
         self, hailo_driver, audio_queue, user_height_mm=1780, camera_height_mm=1220
     ):
@@ -14,7 +13,7 @@ class DepthDetector:
         self.audio_queue = audio_queue
 
         # Interruptor Principal
-        self.is_active = True
+        self.is_active = False
 
         self.danger_streak = 0
         self.frame_counter = 0
@@ -53,13 +52,13 @@ class DepthDetector:
         # El alto del cuadro será exactamente la distancia calculada en píxeles
         self.rect_height = head_pixels
 
-        print("\n====================================")
-        print(f"🔧 RADAR AUTO-CALIBRADO (MODO EXTERIORES) 🔧")
-        print(f"Usuario: {user_height}mm | Cámara: {camera_height}mm")
-        print(
-            f"🔴 Zona de Protección: Y={self.rect_y} a {self.rect_y + self.rect_height}"
-        )
-        print("====================================\n")
+        # print("\n====================================")
+        # print(f"RADAR AUTO-CALIBRADO (MODO EXTERIORES) 🔧")
+        # print(f"Usuario: {user_height}mm | Cámara: {camera_height}mm")
+        # print(
+        #     f"Zona de Protección: Y={self.rect_y} a {self.rect_y + self.rect_height}"
+        # )
+        # print("====================================\n")
 
     def toggle_radar(self):
         """Enciende o apaga el radar aéreo."""
@@ -74,10 +73,22 @@ class DepthDetector:
             return False
 
         objetos_seguros = [
-                    "person", "car", "truck", "bus", "motorcycle", "bicycle", "train",
-                    "horse", "cow", "dog", "cat", 
-                    "refrigerator", "tv", "microwave", "oven"
-                ]
+            "person",
+            "car",
+            "truck",
+            "bus",
+            "motorcycle",
+            "bicycle",
+            "train",
+            "horse",
+            "cow",
+            "dog",
+            "cat",
+            "refrigerator",
+            "tv",
+            "microwave",
+            "oven",
+        ]
 
         for det in yolo_detections:
             name, bbox, score = det
@@ -99,9 +110,9 @@ class DepthDetector:
             )
 
             if choca_x and choca_y:
-                print(
-                    f"[Radar Aéreo] 🛑 Ignorando obstáculo: Es un(a) '{name}' TOCANDO el cuadro."
-                )
+                # print(
+                #     f"[Radar Aéreo] Ignorando obstáculo: Es un(a) '{name}' TOCANDO el cuadro."
+                # )
                 return True
 
         return False
@@ -140,7 +151,7 @@ class DepthDetector:
             if es_objeto_ignorado:
                 hay_peligro = False  # Cancelamos la alarma
 
-        print(f"[Radar] Protección Facial: {bloqueo_alto:.1f}% | Alarma: {hay_peligro}")
+        # print(f"[Radar] Protección Facial: {bloqueo_alto:.1f}% | Alarma: {hay_peligro}")
 
         # 5. Histéresis
         if hay_peligro:
@@ -154,7 +165,7 @@ class DepthDetector:
         if peligro_confirmado:
             current_time = time.time()
             if current_time - self.last_alarm_time >= 10.0:
-                print("🚨 ¡BIP ESPACIAL! PELIGRO AÉREO CONFIRMADO 🚨")
+                # print("¡BIP ESPACIAL! PELIGRO AÉREO CONFIRMADO 🚨")
 
                 cmd = json.dumps(
                     {"position": "center", "frequencyCenter": 800, "frequencySide": 800}

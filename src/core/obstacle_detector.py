@@ -14,14 +14,24 @@ class ObstacleDetector:
         self.audio_queue = audio_queue
         self.floor_matrix = None
         self.is_calibrating = False
+        self.is_active = False  # Apagado por defecto
         if not ignore_tof:
             self.recalibrate_sensor()
+
+    def toggle_radar(self):
+        """Enciende o apaga el ToF (detección de huecos)."""
+        self.is_active = not self.is_active
+        estado = "ACTIVADO" if self.is_active else "DESACTIVADO"
+        print(f"📡 [ToF Radar] Sistema {estado}")
+        return self.is_active
 
     def recalibrate_sensor(self):
         self.is_calibrating = True
         time.sleep(0.1)
-        self.floor_matrix = self.tof.get_stable_matrix()
+        if self.tof:
+            self.floor_matrix = self.tof.get_stable_matrix()
         self.is_calibrating = False
+        self.is_active = True  # Al calibrar, se activa automáticamente
 
     def detect_hole(self, matrix_cm):
         """
@@ -76,9 +86,10 @@ class ObstacleDetector:
             H = self.tof.sensor_height_mm
 
             while True:
-                if self.is_calibrating:
+                if not self.is_active or self.is_calibrating:
                     time.sleep(0.1)
                     continue
+
                 # 1. Obtenemos los milímetros crudos
                 current_matrix = self.tof.get_matrix()
 

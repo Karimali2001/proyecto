@@ -16,6 +16,7 @@ class MenuController:
         obstacle_detector,
         audio_queue,
         ocr,
+        depth_detector=None,
     ):
 
         self.object_detector = object_detector
@@ -23,6 +24,7 @@ class MenuController:
         self.audio_queue = audio_queue
         self.ocr = ocr
         self.navigation = navigation
+        self.depth_detector = depth_detector
 
         # Initialize Voice Interface for STT commands
         self.voice_interface = VoiceInterface(audio_queue)
@@ -116,33 +118,13 @@ class MenuController:
                 # Define standard commands for difflib matching
                 standard_commands = [
                     "menu",
-                    "cancela el viaje",
-                    "listame mis ubicaciones",
                     "donde estoy",
                     "calibrar",
+                    "huecos",
+                    "aereo",
                 ]
 
-                # 1. Check for dynamic commands first by prefix
-                if text_lower.startswith("llevame a"):
-                    destino = text_lower.replace("llevame a", "").strip()
-                    print(
-                        f"[MenuController] Acción detectada: Llevame a tal lugar. Destino: {destino}"
-                    )
-                    break
-                elif text_lower.startswith(
-                    "guarda la ubicacion como"
-                ) or text_lower.startswith("guarda la ubicación como"):
-                    nombre = (
-                        text_lower.replace("guarda la ubicacion como", "")
-                        .replace("guarda la ubicación como", "")
-                        .strip()
-                    )
-                    print(
-                        f"[MenuController] Acción detectada: Guarda la ubicación como. Nombre: {nombre}"
-                    )
-                    break
-
-                # 2. Check standard commands using difflib for fuzzy matching
+                # Check standard commands using difflib for fuzzy matching
                 matches = difflib.get_close_matches(
                     text_lower, standard_commands, n=1, cutoff=0.6
                 )
@@ -155,23 +137,15 @@ class MenuController:
                         menu_text = (
                             "Este es el menú de ayuda. Puedes decir los siguientes comandos. "
                             "Número uno. Di Menú. para listar qué puedo hacer por ti. "
-                            "Número dos. Di Llévame a. seguido de un lugar para iniciar la navegación. "
-                            "Número tres. Di Cancela el viaje. para detener tu navegación actual. "
-                            "Número cuatro. Di Guarda la ubicación como. seguido de un nombre para guardar el lugar donde estás. "
-                            "Número cinco. Di Lístame mis ubicaciones. para escuchar tus lugares guardados. "
-                            "Número seis. Di Dónde estoy. para conocer tu posición actual en el mapa. "
-                            "Número siete. Di Calibrar. para ajustar el sensor a tu postura y altura actual. "
+                            "Número dos. Di Dónde estoy. para conocer tu posición actual en el mapa. "
+                            "Número tres. Di Calibrar. para ajustar el sensor a tu postura y altura actual. "
+                            "Número cuatro. Di Huecos. para activar o desactivar la detección de huecos en el piso. "
+                            "Número cinco. Di Aéreo. para activar o desactivar la detección de obstáculos oclusión facial. "
                             "Para continuar. vuelve a presionar los botones y di un comando."
                         )
 
                         self.audio_queue.put(self.audio_queue.VOICE_MENU, menu_text)
 
-                    elif best_match == "cancela el viaje":
-                        print("[MenuController] Acción detectada: Cancela el viaje")
-                    elif best_match == "listame mis ubicaciones":
-                        print(
-                            "[MenuController] Acción detectada: Listame mis ubicaciones"
-                        )
                     elif best_match == "donde estoy":
                         print("[MenuController] Acción detectada: Donde estoy")
 
@@ -189,6 +163,11 @@ class MenuController:
                             "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
                         )
 
+                        # Si obstacle_detector tiene una función de calibración o se activa aquí, lo llamamos
+                        if self.obstacle_detector:
+                            self.obstacle_detector.is_active = True
+                            print("[MenuController] Obst activado por calibración.")
+
                         self.obstacle_detector.recalibrate_sensor()
 
                         # 2. Avisamos que terminó
@@ -196,6 +175,26 @@ class MenuController:
                             self.audio_queue.VOICE_MENU,
                             "Calibración completada con éxito. Listo para caminar.",
                         )
+
+                    elif best_match == "huecos":
+                        print("[MenuController] Acción detectada: Huecos")
+                        if self.obstacle_detector:
+                            is_active = self.obstacle_detector.toggle_radar()
+                            estado = "activada" if is_active else "desactivada"
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU,
+                                f"Detección de huecos {estado}.",
+                            )
+
+                    elif best_match == "aereo":
+                        print("[MenuController] Acción detectada: Aereo")
+                        if self.depth_detector:
+                            is_active = self.depth_detector.toggle_radar()
+                            estado = "activada" if is_active else "desactivada"
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU,
+                                f"Detección de obstáculos aéreos {estado}.",
+                            )
 
                     break  # Command understood, exit the loop
 

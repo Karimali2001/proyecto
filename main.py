@@ -141,7 +141,12 @@ if __name__ == "__main__":
     navigation = Navigation()
 
     menuController = MenuController(
-        object_detector, navigation, obstacle_detector, audio_queue, ocr_driver
+        object_detector,
+        navigation,
+        obstacle_detector,
+        audio_queue,
+        ocr_driver,
+        depth_detector,
     )
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)

@@ -5,13 +5,11 @@ import requests
 from src.drivers.gps_driver import GPS
 
 
-
 class Navigation:
     def __init__(self):
 
         try:
             self.gps = GPS()
-
 
         except Exception as e:
             print(f"Error initializing GPS or IMU: {e}")
@@ -139,7 +137,7 @@ class Navigation:
             or self.longitude is None
             or self.last_fix_time is None
         ):
-            return "Aún estoy buscando señal de los satélites. Por favor, asegúrate de estar a cielo abierto."
+            return "Aún estoy buscando señal de los satélites. Por favor, asegúrate de no estar en un lugar cerrado."
 
         # Calculate how much time has passed since the last valid location fix
         transcurred_time = time.time() - self.last_fix_time
