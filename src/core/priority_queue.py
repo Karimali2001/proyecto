@@ -57,3 +57,18 @@ class AudioPriorityQueue:
         with self.lock:
             self.current_priority = float("inf")
         self.pq.task_done()
+
+    def is_priority_active_or_queued(self, target_priority):
+        """
+        Returns True if the specified priority is currently playing OR waiting in the queue.
+        """
+        with self.lock:
+            if self.current_priority == target_priority:
+                return True
+
+            # Check the pending queue (pq.queue is a list of tuples: (priority, counter, message))
+            for item in self.pq.queue:
+                if item[0] == target_priority:
+                    return True
+
+            return False

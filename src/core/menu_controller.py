@@ -49,6 +49,14 @@ class MenuController:
             return
 
         if self.btn_1.is_pressed:
+            if self.audio_queue.is_priority_active_or_queued(
+                self.audio_queue.OBJECT_DETECTION
+            ):
+                print(
+                    "[MenuController] Object detection message already active or queued, skipping new message."
+                )
+                return
+
             if len(self.object_detector.getLastDetection()) == 0:
                 self.audio_queue.put(
                     self.audio_queue.OBJECT_DETECTION, "Camino Despejado"
@@ -67,6 +75,14 @@ class MenuController:
             return
 
         if self.btn_2.is_pressed:
+            if self.audio_queue.is_priority_active_or_queued(
+                self.audio_queue.TEXT_RECOGNITION
+            ):
+                print(
+                    "[MenuController] Text recognition message already active or queued, skipping new message."
+                )
+                return
+
             print("[Btn2] Read text")
             if self.ocr:
                 detected_text = self.ocr.capture_and_read(stream_name="main")
@@ -95,6 +111,12 @@ class MenuController:
                 )
 
     def both_btns_pressed(self):
+
+        if self.audio_queue.is_priority_active_or_queued(self.audio_queue.VOICE_MENU):
+            print(
+                "[MenuController] Voice menu already active or queued, skipping new voice menu activation."
+            )
+            return
 
         current_time = time.time()
 
@@ -166,7 +188,9 @@ class MenuController:
                         # If obstacle_detector has a calibrate function or activates here, we call it
                         if self.obstacle_detector:
                             self.obstacle_detector.is_active = True
-                            print("[MenuController] Obstacle detector activated by calibration.")
+                            print(
+                                "[MenuController] Obstacle detector activated by calibration."
+                            )
 
                         self.obstacle_detector.recalibrate_sensor()
 
@@ -199,9 +223,7 @@ class MenuController:
                     break  # Command understood, exit the loop
 
                 else:
-                    print(
-                        "[MenuController] Command not recognized, asking to repeat."
-                    )
+                    print("[MenuController] Command not recognized, asking to repeat.")
                     self.audio_queue.put(
                         self.audio_queue.VOICE_MENU,
                         "No te entendí. Vuelve a intentarlo presionando los dos botones.",
