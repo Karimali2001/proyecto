@@ -7,19 +7,19 @@ import warnings
 
 class Tof:
     def __init__(self, sensor_height_mm=1220):
-        print("[Tof] Initializando Tof en modo 8x8 (Seguro)...")
+        print("[Tof] Initializing Tof in 8x8 mode (Safe)...")
         self.sensor = qwiic_vl53l5cx.QwiicVL53L5CX()
 
         self.sensor_height_mm = sensor_height_mm
 
         if not self.sensor.is_connected():
-            raise RuntimeError("[Tof] El dispositivo no está conectado.")
+            raise RuntimeError("[Tof] Device is not connected.")
 
-        print("Iniciando sensor VL53L5CX...")
+        print("Starting VL53L5CX sensor...")
         if not self.sensor.begin():
-            raise RuntimeError("[Tof] Falló la inicialización.")
+            raise RuntimeError("[Tof] Initialization failed.")
 
-        # Volvemos a la configuración 8x8 que ya sabemos que funciona perfecto
+        # We return to the 8x8 configuration that we know works perfectly
         self.sensor.set_resolution(self.sensor.kResolution8x8)
         self.sensor.set_target_order(self.sensor.kTargetOrderClosest)
         self.sensor.set_ranging_frequency_hz(5)
@@ -32,7 +32,7 @@ class Tof:
         if self.sensor.check_data_ready():
             measurement_data = self.sensor.get_ranging_data()
 
-            # Extraemos los 64 valores
+            # We extract the 64 values
             flat_distance = measurement_data.distance_mm
             flat_status = measurement_data.target_status
 
@@ -68,25 +68,23 @@ if __name__ == "__main__":
         tof = Tof(sensor_height_mm=770)
 
         print("\n" + "=" * 50)
-        print("SISTEMA DE DETECCIÓN DE ALTURA EXACTA (8x8)")
+        print("EXACT HEIGHT DETECTION SYSTEM (8x8)")
         print("=" * 50 + "\n")
 
         while True:
-            # PASO 1
-            input(
-                "1. Asegúrate de que NO HAY NADA (solo piso vacío) y presiona ENTER..."
-            )
-            print("Escaneando el suelo...", end="", flush=True)
+            # STEP 1
+            input("1. Make sure THERE IS NOTHING (only empty floor) and press ENTER...")
+            print("Scanning the floor...", end="", flush=True)
             floor_matrix = tof.get_stable_matrix()
-            print(" ¡Guardado!\n")
+            print(" Saved!\n")
 
-            # PASO 2
-            input("2. Pon el libro de 25cm y presiona ENTER...")
-            print("Escaneando el objeto...", end="", flush=True)
+            # STEP 2
+            input("2. Put the 25cm book and press ENTER...")
+            print("Scanning the object...", end="", flush=True)
             obj_matrix = tof.get_stable_matrix()
-            print(" ¡Guardado!\n")
+            print(" Saved!\n")
 
-            # CÁLCULO MÁGICO PER-PÍXEL (Matriz 8x8)
+            # PER-PIXEL MAGIC CALCULATION (8x8 Matrix)
             height_matrix = np.zeros((8, 8))
             valid_mask = (floor_matrix > 0) & (obj_matrix > 0)
 
@@ -95,23 +93,23 @@ if __name__ == "__main__":
                 1.0 - (obj_matrix[valid_mask] / floor_matrix[valid_mask])
             )
 
-            print("--- MATRIZ DE ALTURA DEL OBJETO (cm reales) ---")
-            matrix_en_cm = np.round(height_matrix / 10.0, 1)
-            print(matrix_en_cm)
+            print("--- OBJECT HEIGHT MATRIX (real cm) ---")
+            matrix_in_cm = np.round(height_matrix / 10.0, 1)
+            print(matrix_in_cm)
 
-            píxeles_validos = matrix_en_cm[matrix_en_cm > 5.0]
+            valid_pixels = matrix_in_cm[matrix_in_cm > 5.0]
 
             print("\n" + "=" * 50)
-            if len(píxeles_validos) > 0:
-                altura_estimada = np.max(píxeles_validos)
-                print(f"=> ALTURA DEL OBSTÁCULO: {altura_estimada} cm")
+            if len(valid_pixels) > 0:
+                estimated_height = np.max(valid_pixels)
+                print(f"=> OBSTACLE HEIGHT: {estimated_height} cm")
             else:
-                print("=> NO SE DETECTÓ NINGÚN OBSTÁCULO.")
+                print("=> NO OBSTACLE DETECTED.")
             print("=" * 50 + "\n")
 
-            input("Presiona ENTER para probar de nuevo...")
+            input("Press ENTER to try again...")
 
     except KeyboardInterrupt:
-        print("\n[Tof]: Programa detenido.")
+        print("\n[Tof]: Program stopped.")
     except Exception as e:
         print(f"\n[Tof] Error: {e}")

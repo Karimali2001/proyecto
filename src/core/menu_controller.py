@@ -132,7 +132,7 @@ class MenuController:
                 if matches:
                     best_match = matches[0]
                     if best_match == "menu":
-                        print("[MenuController] Acción detectada: Menú")
+                        print("[MenuController] Action detected: Menu")
 
                         menu_text = (
                             "Este es el menú de ayuda. Puedes decir los siguientes comandos. "
@@ -147,60 +147,60 @@ class MenuController:
                         self.audio_queue.put(self.audio_queue.VOICE_MENU, menu_text)
 
                     elif best_match == "donde estoy":
-                        print("[MenuController] Acción detectada: Donde estoy")
+                        print("[MenuController] Action detected: Where am I")
 
-                        ubication_message = self.navigation.get_where_am_i_message()
+                        location_message = self.navigation.get_where_am_i_message()
 
                         self.audio_queue.put(
-                            self.audio_queue.NAVIGATION, ubication_message
+                            self.audio_queue.NAVIGATION, location_message
                         )
                     elif best_match == "calibrar":
-                        print("[MenuController] Acción detectada: Calibrar")
+                        print("[MenuController] Action detected: Calibrate")
 
-                        # 1. Avisamos al usuario que se quede quieto
+                        # 1. Warn user to stay still
                         self.audio_queue.put(
                             self.audio_queue.VOICE_MENU,
                             "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
                         )
 
-                        # Si obstacle_detector tiene una función de calibración o se activa aquí, lo llamamos
+                        # If obstacle_detector has a calibrate function or activates here, we call it
                         if self.obstacle_detector:
                             self.obstacle_detector.is_active = True
-                            print("[MenuController] Obst activado por calibración.")
+                            print("[MenuController] Obstacle detector activated by calibration.")
 
                         self.obstacle_detector.recalibrate_sensor()
 
-                        # 2. Avisamos que terminó
+                        # 2. Inform it has finished
                         self.audio_queue.put(
                             self.audio_queue.VOICE_MENU,
                             "Calibración completada con éxito. Listo para caminar.",
                         )
 
                     elif best_match == "huecos":
-                        print("[MenuController] Acción detectada: Huecos")
+                        print("[MenuController] Action detected: Holes")
                         if self.obstacle_detector:
                             is_active = self.obstacle_detector.toggle_radar()
-                            estado = "activada" if is_active else "desactivada"
+                            state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,
-                                f"Detección de huecos {estado}.",
+                                f"Detección de huecos {state}.",
                             )
 
                     elif best_match == "aereo":
-                        print("[MenuController] Acción detectada: Aereo")
+                        print("[MenuController] Action detected: Aerial")
                         if self.depth_detector:
                             is_active = self.depth_detector.toggle_radar()
-                            estado = "activada" if is_active else "desactivada"
+                            state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,
-                                f"Detección de obstáculos aéreos {estado}.",
+                                f"Detección de obstáculos aéreos {state}.",
                             )
 
                     break  # Command understood, exit the loop
 
                 else:
                     print(
-                        "[MenuController] Comando no reconocido, pidiendo repetición."
+                        "[MenuController] Command not recognized, asking to repeat."
                     )
                     self.audio_queue.put(
                         self.audio_queue.VOICE_MENU,
