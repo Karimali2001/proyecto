@@ -33,7 +33,7 @@ class MenuController:
         self.btn_1 = Button(27, bounce_time=0.05)
         self.btn_2 = Button(17, bounce_time=0.05)
 
-        # semafore to prevent from double command
+        # semaphore to prevent double command
         self.last_both_pressed = 0.0
 
         self.last_btn_2_press = 0.0
@@ -46,12 +46,12 @@ class MenuController:
     def handle_btn_1(self):
         time.sleep(0.05)
 
-        # Si el botón 2 está hundido, es un comando combinado
+        # If button 2 is pressed, it's a combined command
         if self.btn_2.is_pressed:
             self.both_btns_pressed()
             return
 
-        # 🔥 QUITAMOS el if self.btn_1.is_pressed: para que reconozca clics súper rápidos
+        # REMOVED if self.btn_1.is_pressed: to recognize super fast clicks
         if self.audio_queue.is_priority_active_or_queued(
             self.audio_queue.OBJECT_DETECTION
         ):
@@ -63,40 +63,40 @@ class MenuController:
         if len(self.object_detector.getLastDetection()) == 0:
             self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, "Camino Despejado")
         else:
-            complete_frase = ",".join(self.object_detector.getLastDetection())
-            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, complete_frase)
+            complete_phrase = ",".join(self.object_detector.getLastDetection())
+            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, complete_phrase)
         print("[Btn1] btn1 pressed")
 
     def handle_btn_2(self):
         time.sleep(0.05)
 
-        # Si el botón 1 está hundido, es un comando combinado
+        # If button 1 is pressed, it's a combined command
         if self.btn_1.is_pressed:
             self.both_btns_pressed()
             return
 
-        # 🔥 QUITAMOS el if self.btn_2.is_pressed: para que atrape los toques rápidos
+        # REMOVED if self.btn_2.is_pressed: to catch fast taps
         current_time = time.time()
 
-        # Aumentamos a 0.6s para dar un margen más humano al doble clic
+        # Increased to 0.6s to give a more human margin to double click
         if current_time - self.last_btn_2_press < 0.6:
-            # 🔥 ¡Doble Clic Detectado! 🔥
-            self.last_btn_2_press = 0.0  # Reseteamos para evitar triples clics
+            # Double Click Detected!
+            self.last_btn_2_press = 0.0  # Reset to avoid triple clicks
 
-            # Cancelamos la acción del clic sencillo si estaba pendiente
+            # Cancel single click action if it was pending
             if self.btn_2_timer is not None:
                 self.btn_2_timer.cancel()
 
-            # Ejecutamos la acción del doble clic
+            # Execute double click action
             self._double_click_ocr()
         else:
-            # 🔥 Primer Clic Detectado 🔥
+            # First Click Detected
             self.last_btn_2_press = current_time
 
             if self.btn_2_timer is not None:
                 self.btn_2_timer.cancel()
 
-            # Esperamos 0.6 segundos. Si no hay otro clic en ese tiempo, ejecuta la foto normal.
+            # Wait 0.6 seconds. If there is no other click in that time, execute normal photo.
             self.btn_2_timer = threading.Timer(0.6, self._single_click_ocr)
             self.btn_2_timer.start()
 
@@ -221,7 +221,7 @@ class MenuController:
                     break  # Exit after one attempt to avoid infinite loop in case of unrecognized commands
 
     def _single_click_ocr(self):
-        """Acción de Clic Sencillo: Lee el texto con Gemini/EasyOCR."""
+        """Single Click Action: Read text with Gemini/EasyOCR."""
         if self.audio_queue.is_priority_active_or_queued(
             self.audio_queue.TEXT_RECOGNITION
         ):
@@ -256,7 +256,7 @@ class MenuController:
             )
 
     def _double_click_ocr(self):
-        """Acción de Doble Clic: Activa o desactiva el Modo Letreros continuo."""
+        """Double Click Action: Activates or deactivates continuous Sign Mode."""
         print("[Btn2] Double Click! Toggling Continuous OCR Mode.")
         if self.ocr:
             is_active = self.ocr.toggle_continuous_mode()

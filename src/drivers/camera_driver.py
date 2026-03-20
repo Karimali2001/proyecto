@@ -54,7 +54,7 @@ class CameraDriver:
     def stop(self):
         try:
             self.picam2.stop()
-            self.picam2.stop_preview()  # Cierra la ventana QT
+            self.picam2.stop_preview()  # Closes the QT window
             print("CameraDriver: Camera stopped.", flush=True)
         except Exception as e:
             print(f"Error stopping camera: {e}")
@@ -66,37 +66,37 @@ class CameraDriver:
         """Sets the callback for drawing/processing on the main thread loop (preview)"""
         self.picam2.pre_callback = callback_func
 
-    def trigger_autofocus(self, roi_relativo=None):
+    def trigger_autofocus(self, relative_roi=None):
         """
         Triggers the autofocus cycle.
-        roi_relativo: Tupla (x, y, width, height) en porcentajes de 0.0 a 1.0
+        relative_roi: Tuple (x, y, width, height) in percentages from 0.0 to 1.0
         """
         if self.enable_af:
             print("--> Triggering autofocus cycle...")
             try:
-                if roi_relativo is not None:
-                    # 1. Obtenemos las coordenadas reales del sensor físico
+                if relative_roi is not None:
+                    # 1. Get the real coordinates of the physical sensor
                     meta = self.picam2.capture_metadata()
                     if "ScalerCrop" in meta:
                         cx, cy, cw, ch = meta["ScalerCrop"]
-                        rx, ry, rw, rh = roi_relativo
+                        rx, ry, rw, rh = relative_roi
 
-                        # 2. Mapeamos el porcentaje de la IA a los píxeles físicos del lente
+                        # 2. Map the AI percentage to the physical pixels of the lens
                         win_x = int(cx + (rx * cw))
                         win_y = int(cy + (ry * ch))
                         win_w = int(rw * cw)
                         win_h = int(rh * ch)
 
-                        # 3. Le damos la orden al hardware de la cámara
+                        # 3. Give the command to the camera hardware
                         self.picam2.set_controls(
                             {
                                 "AfMetering": controls.AfMeteringEnum.Windows,
                                 "AfWindows": [(win_x, win_y, win_w, win_h)],
                             }
                         )
-                        print(f"--> 🎯 IA forzando enfoque en zona de texto...")
+                        print(f"--> 🎯 AI forcing focus on text area...")
                 else:
-                    # Si no hay coordenadas, vuelve al autoenfoque normal en el centro
+                    # If there are no coordinates, return to normal autofocus in the center
                     self.picam2.set_controls(
                         {"AfMetering": controls.AfMeteringEnum.Auto}
                     )

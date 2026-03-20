@@ -35,7 +35,7 @@ audio_queue = AudioPriorityQueue(audio)
 
 
 def audio_consumer_thread():
-    """This is the only thread aloud to speak"""
+    """This is the only thread allowed to speak"""
     """"Consumes text from the queue that needs to be logged"""
 
     while True:
@@ -76,12 +76,12 @@ def frame_producer_thread(camera_driver, object_detector, depth_detector):
             frame = camera_driver.capture_array()
 
             if frame is not None:
-                # --- A: DETECCIÓN DE OBJETOS ---
+                # --- A: OBJECT DETECTION ---
                 object_detector.process_frame(frame)
 
                 raw_detections = object_detector.getRawDetections()
 
-                # --- B: DETECCIÓN DE PROFUNDIDAD ---
+                # --- B: DEPTH DETECTION ---
                 depth_detector.process_frame(frame, raw_detections)
 
         except Exception as e:
