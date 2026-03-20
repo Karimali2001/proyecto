@@ -117,6 +117,7 @@ if __name__ == "__main__":
     try:
         ocr_driver = OCR(
             owlsight64mp_camera,
+            audio_queue,
             det_model_path=str(base_path / "assets" / "ocr_det.hef"),
         )
     except Exception as e:

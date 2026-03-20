@@ -1,7 +1,7 @@
 from gpiozero import Button
 import time
 import difflib
-
+import threading
 
 from src.ui.voice_interface import VoiceInterface
 
@@ -36,79 +36,69 @@ class MenuController:
         # semafore to prevent from double command
         self.last_both_pressed = 0.0
 
+        self.last_btn_2_press = 0.0
+        self.btn_2_timer = None
+
         # Callbacks
         self.btn_1.when_pressed = self.handle_btn_1
         self.btn_2.when_pressed = self.handle_btn_2
 
     def handle_btn_1(self):
-
         time.sleep(0.05)
 
+        # Si el botón 2 está hundido, es un comando combinado
         if self.btn_2.is_pressed:
             self.both_btns_pressed()
             return
 
-        if self.btn_1.is_pressed:
-            if self.audio_queue.is_priority_active_or_queued(
-                self.audio_queue.OBJECT_DETECTION
-            ):
-                print(
-                    "[MenuController] Object detection message already active or queued, skipping new message."
-                )
-                return
+        # 🔥 QUITAMOS el if self.btn_1.is_pressed: para que reconozca clics súper rápidos
+        if self.audio_queue.is_priority_active_or_queued(
+            self.audio_queue.OBJECT_DETECTION
+        ):
+            print(
+                "[MenuController] Object detection message already active or queued, skipping new message."
+            )
+            return
 
-            if len(self.object_detector.getLastDetection()) == 0:
-                self.audio_queue.put(
-                    self.audio_queue.OBJECT_DETECTION, "Camino Despejado"
-                )
-            else:
-                complete_frase = ",".join(self.object_detector.getLastDetection())
-                self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, complete_frase)
-            print("[Btn1] btn1 pressed")
+        if len(self.object_detector.getLastDetection()) == 0:
+            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, "Camino Despejado")
+        else:
+            complete_frase = ",".join(self.object_detector.getLastDetection())
+            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, complete_frase)
+        print("[Btn1] btn1 pressed")
 
     def handle_btn_2(self):
-
         time.sleep(0.05)
 
+        # Si el botón 1 está hundido, es un comando combinado
         if self.btn_1.is_pressed:
             self.both_btns_pressed()
             return
 
-        if self.btn_2.is_pressed:
-            if self.audio_queue.is_priority_active_or_queued(
-                self.audio_queue.TEXT_RECOGNITION
-            ):
-                print(
-                    "[MenuController] Text recognition message already active or queued, skipping new message."
-                )
-                return
+        # 🔥 QUITAMOS el if self.btn_2.is_pressed: para que atrape los toques rápidos
+        current_time = time.time()
 
-            print("[Btn2] Read text")
-            if self.ocr:
-                detected_text = self.ocr.capture_and_read(stream_name="main")
+        # Aumentamos a 0.6s para dar un margen más humano al doble clic
+        if current_time - self.last_btn_2_press < 0.6:
+            # 🔥 ¡Doble Clic Detectado! 🔥
+            self.last_btn_2_press = 0.0  # Reseteamos para evitar triples clics
 
-                if detected_text and detected_text not in [
-                    "Error de hardware.",
-                    "No encontré ningún texto en la imagen.",
-                    "Cámara no inicializada.",
-                    "No se pudo capturar la imagen.",
-                ]:
-                    self.audio_queue.put(
-                        self.audio_queue.TEXT_RECOGNITION, detected_text
-                    )
-                elif detected_text == "No encontré ningún texto en la imagen.":
-                    self.audio_queue.put(
-                        self.audio_queue.TEXT_RECOGNITION, "No encontré texto"
-                    )
-                else:
-                    self.audio_queue.put(
-                        self.audio_queue.TEXT_RECOGNITION,
-                        "Hubo un error al leer el texto",
-                    )
-            else:
-                self.audio_queue.put(
-                    self.audio_queue.TEXT_RECOGNITION, "Lector de texto no inicializado"
-                )
+            # Cancelamos la acción del clic sencillo si estaba pendiente
+            if self.btn_2_timer is not None:
+                self.btn_2_timer.cancel()
+
+            # Ejecutamos la acción del doble clic
+            self._double_click_ocr()
+        else:
+            # 🔥 Primer Clic Detectado 🔥
+            self.last_btn_2_press = current_time
+
+            if self.btn_2_timer is not None:
+                self.btn_2_timer.cancel()
+
+            # Esperamos 0.6 segundos. Si no hay otro clic en ese tiempo, ejecuta la foto normal.
+            self.btn_2_timer = threading.Timer(0.6, self._single_click_ocr)
+            self.btn_2_timer.start()
 
     def both_btns_pressed(self):
 
@@ -229,3 +219,53 @@ class MenuController:
                         "No te entendí. Vuelve a intentarlo presionando los dos botones.",
                     )
                     break  # Exit after one attempt to avoid infinite loop in case of unrecognized commands
+
+    def _single_click_ocr(self):
+        """Acción de Clic Sencillo: Lee el texto con Gemini/EasyOCR."""
+        if self.audio_queue.is_priority_active_or_queued(
+            self.audio_queue.TEXT_RECOGNITION
+        ):
+            print(
+                "[MenuController] Text recognition message already active or queued, skipping new message."
+            )
+            return
+
+        print("[Btn2] Read text (Single Click)")
+        if self.ocr:
+            detected_text = self.ocr.capture_and_read(stream_name="main")
+
+            if detected_text and detected_text not in [
+                "Error de hardware.",
+                "No encontré ningún texto en la imagen.",
+                "Cámara no inicializada.",
+                "No se pudo capturar la imagen.",
+            ]:
+                self.audio_queue.put(self.audio_queue.TEXT_RECOGNITION, detected_text)
+            elif detected_text == "No encontré ningún texto en la imagen.":
+                self.audio_queue.put(
+                    self.audio_queue.TEXT_RECOGNITION, "No encontré texto"
+                )
+            else:
+                self.audio_queue.put(
+                    self.audio_queue.TEXT_RECOGNITION,
+                    "Hubo un error al leer el texto",
+                )
+        else:
+            self.audio_queue.put(
+                self.audio_queue.TEXT_RECOGNITION, "Lector de texto no inicializado"
+            )
+
+    def _double_click_ocr(self):
+        """Acción de Doble Clic: Activa o desactiva el Modo Letreros continuo."""
+        print("[Btn2] Double Click! Toggling Continuous OCR Mode.")
+        if self.ocr:
+            is_active = self.ocr.toggle_continuous_mode()
+            state = "activado" if is_active else "desactivado"
+            self.audio_queue.put(
+                self.audio_queue.VOICE_MENU,
+                f"Modo lectura de letreros {state}.",
+            )
+        else:
+            self.audio_queue.put(
+                self.audio_queue.VOICE_MENU, "Lector de texto no inicializado."
+            )

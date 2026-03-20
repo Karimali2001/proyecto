@@ -66,18 +66,45 @@ class CameraDriver:
         """Sets the callback for drawing/processing on the main thread loop (preview)"""
         self.picam2.pre_callback = callback_func
 
-    def trigger_autofocus(self):
-        """Triggers the autofocus cycle if enabled."""
+    def trigger_autofocus(self, roi_relativo=None):
+        """
+        Triggers the autofocus cycle.
+        roi_relativo: Tupla (x, y, width, height) en porcentajes de 0.0 a 1.0
+        """
         if self.enable_af:
             print("--> Triggering autofocus cycle...")
             try:
-                # This replaces time.sleep(3). It waits only as long as necessary.
+                if roi_relativo is not None:
+                    # 1. Obtenemos las coordenadas reales del sensor físico
+                    meta = self.picam2.capture_metadata()
+                    if "ScalerCrop" in meta:
+                        cx, cy, cw, ch = meta["ScalerCrop"]
+                        rx, ry, rw, rh = roi_relativo
+
+                        # 2. Mapeamos el porcentaje de la IA a los píxeles físicos del lente
+                        win_x = int(cx + (rx * cw))
+                        win_y = int(cy + (ry * ch))
+                        win_w = int(rw * cw)
+                        win_h = int(rh * ch)
+
+                        # 3. Le damos la orden al hardware de la cámara
+                        self.picam2.set_controls(
+                            {
+                                "AfMetering": controls.AfMeteringEnum.Windows,
+                                "AfWindows": [(win_x, win_y, win_w, win_h)],
+                            }
+                        )
+                        print(f"--> 🎯 IA forzando enfoque en zona de texto...")
+                else:
+                    # Si no hay coordenadas, vuelve al autoenfoque normal en el centro
+                    self.picam2.set_controls(
+                        {"AfMetering": controls.AfMeteringEnum.Auto}
+                    )
+
                 success = self.picam2.autofocus_cycle()
                 if success:
                     print("--> Perfect focus achieved!")
                 else:
-                    print(
-                        "--> Warning: The lens did not achieve perfect focus, capturing anyway."
-                    )
+                    print("--> Warning: The lens did not achieve perfect focus.")
             except Exception as e:
                 print(f"Error triggering autofocus: {e}")
