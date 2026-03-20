@@ -86,14 +86,14 @@ class ObjectDetector:
         mask_green = cv2.inRange(hsv, np.array([40, 50, 50]), np.array([90, 255, 255]))
 
         colors = {
-            "red": cv2.countNonZero(mask_red),
-            "yellow": cv2.countNonZero(mask_yellow),
-            "green": cv2.countNonZero(mask_green),
+            "rojo": cv2.countNonZero(mask_red),
+            "amarillo": cv2.countNonZero(mask_yellow),
+            "verde": cv2.countNonZero(mask_green),
         }
         dominant = max(colors, key=colors.get)
         if colors[dominant] > 20:
             return dominant
-        return "off"
+        return "apagado"
 
     def _compute_iou(self, boxA, boxB):
         xA, yA = max(boxA[0], boxB[0]), max(boxA[1], boxB[1])
@@ -139,7 +139,7 @@ class ObjectDetector:
                 )
                 if hour > 12:
                     hour -= 12
-                current_frame_objects.append(f"{translated_name} at {hour}")
+                current_frame_objects.append(f"{translated_name} a las {hour}")
 
                 if name == "traffic light" and self.audio_queue:
                     color = self._get_traffic_light_color(frame, track.tlbr)
@@ -149,9 +149,9 @@ class ObjectDetector:
                             tslw > 180.0
                         ):
                             msg = (
-                                f"Caution, traffic light at {hour} is off or damaged"
-                                if color == "off"
-                                else f"Traffic light at {hour} in {color}"
+                                f"Precaución, semáforo a las {hour} está apagado o dañado"
+                                if color == "apagado"
+                                else f"Semáforo a las {hour} en {color}"
                             )
                             self.audio_queue.put(
                                 AudioPriorityQueue.DANGEROUS_OBJECTS, msg
@@ -179,7 +179,7 @@ class ObjectDetector:
                         ):
                             self.audio_queue.put(
                                 AudioPriorityQueue.DANGEROUS_OBJECTS,
-                                f"Caution, moving {translated_name} at {hour}",
+                                f"Precaución, {translated_name} en movimiento a las {hour}",
                             )
                             self.vehicle_cooldown[track.track_id] = time.time()
 
@@ -215,7 +215,7 @@ class ObjectDetector:
 
                     if ratio > 0.20:  # Direct arrival
                         self.audio_queue.put(
-                            AudioPriorityQueue.OBJECT_DETECTION, "Arrived at your seat"
+                            AudioPriorityQueue.OBJECT_DETECTION, "Llegaste a tu asiento"
                         )
                         self.toggle_seat_finder()
                     else:
@@ -251,13 +251,13 @@ class ObjectDetector:
                         if self.last_seat_ratio > 0.08:
                             self.audio_queue.put(
                                 AudioPriorityQueue.OBJECT_DETECTION,
-                                "Arrived at your seat",
+                                "Llegaste a tu asiento",
                             )
                             self.toggle_seat_finder()
                         else:
                             self.audio_queue.put(
                                 AudioPriorityQueue.OBJECT_DETECTION,
-                                "Reference lost",
+                                "Referencia perdida",
                             )
                             self.seat_state = 0
 

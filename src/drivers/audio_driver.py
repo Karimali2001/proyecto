@@ -127,7 +127,7 @@ class Audio:
 
     def speak_thread(self):
         self.speak(
-            "Audio system. No error warnings and running in stereo.", "1.0"
+            "Sistema de audio inicializado y funcionando al cien", "1.0"
         )
 
 

@@ -83,7 +83,7 @@ class MenuController:
             return
 
         if len(self.object_detector.getLastDetection()) == 0:
-            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, "Clear path")
+            self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, "Camino Despejado")
         else:
             complete_phrase = ", ".join(self.object_detector.getLastDetection())
             self.audio_queue.put(self.audio_queue.OBJECT_DETECTION, complete_phrase)
@@ -93,11 +93,11 @@ class MenuController:
         """Double click action: Activates the free seat finder."""
         print("[Btn1] Double Click! Seat finder.")
         is_active = self.object_detector.toggle_seat_finder()
-        state = "activated" if is_active else "deactivated"
+        state = "activado" if is_active else "desactivado"
 
         # Inform the user by voice
         self.audio_queue.put(
-            self.audio_queue.VOICE_MENU, f"Free seat finder {state}"
+            self.audio_queue.VOICE_MENU, f"Buscador de asientos libres {state}"
         )
 
     def handle_btn_2(self):
@@ -147,24 +147,24 @@ class MenuController:
             detected_text = self.ocr.capture_and_read(stream_name="main")
 
             if detected_text and detected_text not in [
-                "Hardware error.",
-                "No text found in the image.",
-                "Camera not initialized.",
-                "Could not capture the image.",
+                "Error de hardware.",
+                "No encontré ningún texto en la imagen.",
+                "Cámara no inicializada.",
+                "No se pudo capturar la imagen.",
             ]:
                 self.audio_queue.put(self.audio_queue.TEXT_RECOGNITION, detected_text)
-            elif detected_text == "No text found in the image.":
+            elif detected_text == "No encontré ningún texto en la imagen.":
                 self.audio_queue.put(
-                    self.audio_queue.TEXT_RECOGNITION, "No text found"
+                    self.audio_queue.TEXT_RECOGNITION, "No encontré texto"
                 )
             else:
                 self.audio_queue.put(
                     self.audio_queue.TEXT_RECOGNITION,
-                    "There was an error reading the text",
+                    "Hubo un error al leer el texto",
                 )
         else:
             self.audio_queue.put(
-                self.audio_queue.TEXT_RECOGNITION, "Text reader not initialized"
+                self.audio_queue.TEXT_RECOGNITION, "Lector de texto no inicializado"
             )
 
     def _double_click_ocr(self):
@@ -172,14 +172,14 @@ class MenuController:
         print("[Btn2] Double Click! Toggling Continuous OCR Mode.")
         if self.ocr:
             is_active = self.ocr.toggle_continuous_mode()
-            state = "activated" if is_active else "deactivated"
+            state = "activado" if is_active else "desactivado"
             self.audio_queue.put(
                 self.audio_queue.VOICE_MENU,
-                f"Sign reading mode {state}.",
+                f"Modo lectura de letreros {state}.",
             )
         else:
             self.audio_queue.put(
-                self.audio_queue.VOICE_MENU, "Text reader not initialized."
+                self.audio_queue.VOICE_MENU, "Lector de texto no inicializado."
             )
 
     def both_btns_pressed(self):
@@ -229,13 +229,13 @@ class MenuController:
                         print("[MenuController] Action detected: Menu")
 
                         menu_text = (
-                            "This is the help menu. You can say the following commands. "
-                            "Number one. Say Menu. to list what I can do for you. "
-                            "Number two. Say Where am I. to know your current location on the map. "
-                            "Number three. Say Calibrate. to adjust the sensor to your current posture and height. "
-                            "Number four. Say Holes. to activate or deactivate the detection of holes in the floor. "
-                            "Number five. Say Aerial. to activate or deactivate the detection of aerial obstacles. "
-                            "To continue, press the buttons again and say a command."
+                            "Este es el menú de ayuda. Puedes decir los siguientes comandos. "
+                            "Número uno. Di Menú. para listar qué puedo hacer por ti. "
+                            "Número dos. Di Dónde estoy. para conocer tu posición actual en el mapa. "
+                            "Número tres. Di Calibrar. para ajustar el sensor a tu postura y altura actual. "
+                            "Número cuatro. Di Huecos. para activar o desactivar la detección de huecos en el piso. "
+                            "Número cinco. Di Aéreo. para activar o desactivar la detección de obstáculos aéreo. "
+                            "Para continuar. vuelve a presionar los botones y di un comando."
                         )
 
                         self.audio_queue.put(self.audio_queue.VOICE_MENU, menu_text)
@@ -254,7 +254,7 @@ class MenuController:
                         # 1. Warn user to stay still
                         self.audio_queue.put(
                             self.audio_queue.VOICE_MENU,
-                            "Calibrating. Please stay still looking forward in a clear space.",
+                            "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
                         )
 
                         # If hole_detector has a calibrate function or activates here, we call it
@@ -269,27 +269,27 @@ class MenuController:
                         # 2. Inform it has finished
                         self.audio_queue.put(
                             self.audio_queue.VOICE_MENU,
-                            "Calibration completed successfully. Ready to walk.",
+                            "Calibración completada con éxito. Listo para caminar.",
                         )
 
                     elif best_match == "huecos":
                         print("[MenuController] Action detected: Holes")
                         if self.hole_detector:
                             is_active = self.hole_detector.toggle_radar()
-                            state = "activated" if is_active else "deactivated"
+                            state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,
-                                f"Holes detection {state}.",
+                                f"Detección de huecos {state}.",
                             )
 
                     elif best_match == "aereo":
                         print("[MenuController] Action detected: Aerial")
                         if self.aerial_obstacle_detector:
                             is_active = self.aerial_obstacle_detector.toggle_radar()
-                            state = "activated" if is_active else "deactivated"
+                            state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,
-                                f"Aerial obstacles detection {state}.",
+                                f"Detección de obstáculos aéreos {state}.",
                             )
 
                     break  # Command understood, exit the loop
@@ -298,6 +298,6 @@ class MenuController:
                     print("[MenuController] Command not recognized, asking to repeat.")
                     self.audio_queue.put(
                         self.audio_queue.VOICE_MENU,
-                        "I didn't understand you. Please try again by pressing both buttons.",
+                        "No te entendí. Vuelve a intentarlo presionando los dos botones.",
                     )
                     break  # Exit after one attempt to avoid infinite loop in case of unrecognized commands
