@@ -13,18 +13,18 @@ class MenuController:
         self,
         object_detector,
         navigation,
-        obstacle_detector,
+        hole_detector,
         audio_queue,
         ocr,
-        depth_detector=None,
+        aerial_obstacle_detector=None,
     ):
 
         self.object_detector = object_detector
-        self.obstacle_detector = obstacle_detector
+        self.hole_detector = hole_detector
         self.audio_queue = audio_queue
         self.ocr = ocr
         self.navigation = navigation
-        self.depth_detector = depth_detector
+        self.aerial_obstacle_detector = aerial_obstacle_detector
 
         # Initialize Voice Interface for STT commands
         self.voice_interface = VoiceInterface(audio_queue)
@@ -175,14 +175,14 @@ class MenuController:
                             "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
                         )
 
-                        # If obstacle_detector has a calibrate function or activates here, we call it
-                        if self.obstacle_detector:
-                            self.obstacle_detector.is_active = True
+                        # If hole_detector has a calibrate function or activates here, we call it
+                        if self.hole_detector:
+                            self.hole_detector.is_active = True
                             print(
-                                "[MenuController] Obstacle detector activated by calibration."
+                                "[MenuController] Hole detector activated by calibration."
                             )
 
-                        self.obstacle_detector.recalibrate_sensor()
+                        self.hole_detector.recalibrate_sensor()
 
                         # 2. Inform it has finished
                         self.audio_queue.put(
@@ -192,8 +192,8 @@ class MenuController:
 
                     elif best_match == "huecos":
                         print("[MenuController] Action detected: Holes")
-                        if self.obstacle_detector:
-                            is_active = self.obstacle_detector.toggle_radar()
+                        if self.hole_detector:
+                            is_active = self.hole_detector.toggle_radar()
                             state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,
@@ -202,8 +202,8 @@ class MenuController:
 
                     elif best_match == "aereo":
                         print("[MenuController] Action detected: Aerial")
-                        if self.depth_detector:
-                            is_active = self.depth_detector.toggle_radar()
+                        if self.aerial_obstacle_detector:
+                            is_active = self.aerial_obstacle_detector.toggle_radar()
                             state = "activada" if is_active else "desactivada"
                             self.audio_queue.put(
                                 self.audio_queue.VOICE_MENU,

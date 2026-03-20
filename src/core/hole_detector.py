@@ -7,7 +7,7 @@ from src.drivers.tof_driver import Tof
 from src.core.priority_queue import AudioPriorityQueue
 
 
-class ObstacleDetector:
+class HoleDetector:
     def __init__(self, audio_queue, sensor_height_mm=1220, ignore_tof=False):
         self.ignore_tof = ignore_tof
         self.tof = Tof(sensor_height_mm=sensor_height_mm) if not ignore_tof else None

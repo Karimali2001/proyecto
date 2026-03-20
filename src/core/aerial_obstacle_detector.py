@@ -5,7 +5,7 @@ import json
 from src.core.priority_queue import AudioPriorityQueue
 
 
-class DepthDetector:
+class AerialObstacleDetector:
     def __init__(
         self, hailo_driver, audio_queue, user_height_mm=1780, camera_height_mm=1220
     ):

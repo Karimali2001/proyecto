@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 from src.core.object_detection.object_detector import ObjectDetector
-from src.core.obstacle_detector import ObstacleDetector
+from src.core.hole_detector import HoleDetector
 from src.core.menu_controller import MenuController
 from src.core.ocr.paddle_ocr import OCR
 from src.drivers.audio_driver import Audio
@@ -14,7 +14,7 @@ from src.core.priority_queue import AudioPriorityQueue
 from src.drivers.camera_driver import CameraDriver
 from src.drivers.hailo_driver import HailoDriver
 from src.core.navigation import Navigation
-from src.core.depth_detector import DepthDetector
+from src.core.aerial_obstacle_detector import AerialObstacleDetector
 
 
 base_path = Path.cwd()
@@ -69,7 +69,7 @@ def audio_consumer_thread():
         audio_queue.task_done()
 
 
-def frame_producer_thread(camera_driver, object_detector, depth_detector):
+def frame_producer_thread(camera_driver, object_detector, aerial_obstacle_detector):
 
     while True:
         try:
@@ -82,7 +82,7 @@ def frame_producer_thread(camera_driver, object_detector, depth_detector):
                 raw_detections = object_detector.getRawDetections()
 
                 # --- B: DEPTH DETECTION ---
-                depth_detector.process_frame(frame, raw_detections)
+                aerial_obstacle_detector.process_frame(frame, raw_detections)
 
         except Exception as e:
             print(f"[Vision Thread] Error: {e}")
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     )
 
     # Initialize obstacle detector
-    obstacle_detector = ObstacleDetector(audio_queue, ignore_tof=True)
+    hole_detector = HoleDetector(audio_queue, ignore_tof=True)
 
     # Initialize OCR driver
     try:
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         depth_driver = None
 
     # Initialize depth detector
-    depth_detector = DepthDetector(
+    aerial_obstacle_detector = AerialObstacleDetector(
         hailo_driver=depth_driver,
         audio_queue=audio_queue,
         user_height_mm=1400,
@@ -156,19 +156,19 @@ if __name__ == "__main__":
     menuController = MenuController(
         object_detector,
         navigation,
-        obstacle_detector,
+        hole_detector,
         audio_queue,
         ocr_driver,
-        depth_detector,
+        aerial_obstacle_detector,
     )
 
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(
         target=frame_producer_thread,
-        args=(global_shutter_camera, object_detector, depth_detector),
+        args=(global_shutter_camera, object_detector, aerial_obstacle_detector),
         daemon=True,
     )
-    t_tof = Thread(target=obstacle_detector.detect_hole_thread, daemon=True)
+    t_tof = Thread(target=hole_detector.detect_hole_thread, daemon=True)
     t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
 
     t_audio.start()
