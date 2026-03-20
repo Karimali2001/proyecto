@@ -23,7 +23,7 @@ sys.path.append(str(current_dir.parent))
 sys.path.append(str(current_dir.parent.parent))
 
 from common.hailo_inference import HailoInfer
-from src.core.paddle_ocr_utils import det_postprocess
+from src.core.ocr.paddle_ocr_utils import det_postprocess
 from src.drivers.camera_driver import CameraDriver
 from src.core.priority_queue import AudioPriorityQueue
 

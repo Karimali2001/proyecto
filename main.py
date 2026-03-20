@@ -5,10 +5,10 @@ from threading import Thread
 from pathlib import Path
 
 
-from src.core.object_detector import ObjectDetector
+from src.core.object_detection.object_detector import ObjectDetector
 from src.core.obstacle_detector import ObstacleDetector
 from src.core.menu_controller import MenuController
-from src.core.paddle_ocr import OCR
+from src.core.ocr.paddle_ocr import OCR
 from src.drivers.audio_driver import Audio
 from src.core.priority_queue import AudioPriorityQueue
 from src.drivers.camera_driver import CameraDriver
@@ -90,30 +90,39 @@ def frame_producer_thread(camera_driver, object_detector, depth_detector):
 
 
 if __name__ == "__main__":
-    # ******** Initializing hailo and camera
-    try:
-        global_shutter_camera = CameraDriver(camera_num=0, enable_af=False)
+    # ******** Initialize hardware drivers and core components
 
+    try:
+        # Initialize camera drivers
+        global_shutter_camera = CameraDriver(camera_num=0, enable_af=False)
         owlsight64mp_camera = CameraDriver(camera_num=1, enable_af=True)
 
-        hailo_driver = HailoDriver(detection_model_path, labels_path)
+        # Initialize Hailo driver for object detection
+        object_detection_driver = HailoDriver(detection_model_path, labels_path)
+        object_detection_driver.start()
 
-        hailo_driver.start()
+        # Get model input shape for camera configuration
+        model_h, model_w, _ = object_detection_driver.get_input_shape()
 
-        model_h, model_w, _ = hailo_driver.get_input_shape()
-
+        # Configure cameras with model input shape
         global_shutter_camera.configure(video_w, video_h, model_w, model_h)
-
         owlsight64mp_camera.configure(video_w, video_h, model_w, model_h)
 
+        # Start camera streams (no preview)
         global_shutter_camera.start(preview=False)
         owlsight64mp_camera.start(preview=False)
     except Exception as e:
         print(f"[Main]: Error initializing camera and model: {e}")
 
-    object_detector = ObjectDetector(global_shutter_camera, hailo_driver)
+    # Initialize object detector
+    object_detector = ObjectDetector(
+        global_shutter_camera, object_detection_driver, audio_queue
+    )
+
+    # Initialize obstacle detector
     obstacle_detector = ObstacleDetector(audio_queue, ignore_tof=True)
 
+    # Initialize OCR driver
     try:
         ocr_driver = OCR(
             owlsight64mp_camera,
@@ -124,14 +133,15 @@ if __name__ == "__main__":
         print(f"[Main]: Error initializing OCR: {e}")
         ocr_driver = None
 
+    # Initialize depth model driver
     try:
         depth_driver = HailoDriver(depth_model_path, labels_path="")
         depth_driver.start()
-
     except Exception as e:
         print(f"[Main]: Error initializing Depth Model: {e}")
         depth_driver = None
 
+    # Initialize depth detector
     depth_detector = DepthDetector(
         hailo_driver=depth_driver,
         audio_queue=audio_queue,
@@ -139,8 +149,10 @@ if __name__ == "__main__":
         camera_height_mm=1100,
     )
 
+    # Initialize navigation logic
     navigation = Navigation()
 
+    # Initialize menu controller
     menuController = MenuController(
         object_detector,
         navigation,

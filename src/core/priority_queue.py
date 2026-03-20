@@ -4,11 +4,12 @@ from threading import Lock
 
 class AudioPriorityQueue:
     HOLE_DETECTION = 1
-    AIR_OBSTACLE = 2
-    VOICE_MENU = 3
-    OBJECT_DETECTION = 4
-    TEXT_RECOGNITION = 4
-    NAVIGATION = 5
+    DANGEROUS_OBJECTS = 2
+    AIR_OBSTACLE = 3
+    VOICE_MENU = 4
+    OBJECT_DETECTION = 5
+    TEXT_RECOGNITION = 5
+    NAVIGATION = 6
 
     def __init__(self, audio_driver):
         """
