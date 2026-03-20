@@ -52,9 +52,12 @@ class VoiceInterface:
             print("[VoiceInterface] Listening... (Speak now!)")
 
             # 1. Start signal via spatial sound queue instead of speaking "Bip"
-            start_cmd = json.dumps(
-                {"position": "center", "frequencyCenter": 800, "frequencySide": 800}
-            )
+            start_cmd = {
+                "action": "sound",
+                "position": "center",
+                "sound_type": "ui",  # Llama al sonido agudo tipo radar
+            }
+
             self.audio_queue.put(AudioPriorityQueue.VOICE_MENU, start_cmd)
 
             # Wait for it to play so microphone doesn't record the beep itself
@@ -76,9 +79,11 @@ class VoiceInterface:
                 print(f"[VoiceInterface] Saved debug audio to {debug_audio_path}")
 
                 # 2. End signal when it finishes capturing
-                end_cmd = json.dumps(
-                    {"position": "center", "frequencyCenter": 400, "frequencySide": 400}
-                )
+                end_cmd = {
+                    "action": "sound",
+                    "position": "center",
+                    "sound_type": "ui",  # Llama al sonido agudo tipo radar
+                }
                 self.audio_queue.put(AudioPriorityQueue.VOICE_MENU, end_cmd)
 
                 print("[VoiceInterface] Processing audio offline...")

@@ -3,7 +3,7 @@ import subprocess
 import time
 import pygame
 import numpy as np
-import threading
+
 
 # RUTA AL BINARIO DE PIPER
 PIPER_PATH = "/home/kness/Desktop/proyecto/venv/bin/piper"
@@ -31,7 +31,7 @@ class Audio:
                 1200, 1500, 0.2, wave_type="sine", volume=0.7
             ),
             # 3. UI/BOTONES: Un "bloop" rápido de 600Hz a 400Hz
-            "ui": self._create_synth_sound(600, 400, 0.1, wave_type="sine", volume=0.5),
+            "ui": self._create_synth_sound(600, 400, 0.1, wave_type="sine", volume=0.7),
         }
 
     def _create_synth_sound(

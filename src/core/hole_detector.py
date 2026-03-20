@@ -1,6 +1,5 @@
 import time
 import numpy as np
-import json
 
 
 from src.drivers.tof_driver import Tof
@@ -116,13 +115,11 @@ class HoleDetector:
                         elif "derecha" in pos_hole:
                             sound_position = "right"
 
-                        cmd = json.dumps(
-                            {
-                                "position": sound_position,
-                                "frequencyCenter": 400,
-                                "frequencySide": 300,
-                            }
-                        )
+                        cmd = {
+                            "action": "sound",
+                            "position": sound_position,
+                            "sound_type": "hole",
+                        }
 
                         self.audio_queue.put(
                             AudioPriorityQueue.HOLE_DETECTION,

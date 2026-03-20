@@ -36,34 +36,20 @@ audio_queue = AudioPriorityQueue(audio)
 
 def audio_consumer_thread():
     """This is the only thread allowed to speak"""
-    """"Consumes text from the queue that needs to be logged"""
-
     while True:
         priority, message = audio_queue.get()
-        print(f"\n[Simulated Audio] Playing Priority {priority}: {message}")
 
-        # Check if the message is a JSON string intended for spatial sound
-        if (
-            isinstance(message, str)
-            and message.startswith("{")
-            and message.endswith("}")
-        ):
-            try:
-                data = json.loads(message)
-                if "position" in data:
-                    kwargs = {"position": data["position"]}
-                    if "frequencyCenter" in data:
-                        kwargs["frequencyCenter"] = data["frequencyCenter"]
-                    if "frequencySide" in data:
-                        kwargs["frequencySide"] = data["frequencySide"]
+        # 1. if the message is a dict with "action": "sound", we play the corresponding sound effect
+        if isinstance(message, dict) and message.get("action") == "sound":
+            audio.play_spatial_sound(
+                position=message.get("position", "center"),
+                sound_type=message.get("sound_type", "ui"),
+            )
+            time.sleep(0.2)  # Pequeña pausa
 
-                    audio.play_spatial_sound(**kwargs)
-                    time.sleep(0.5)
-                else:
-                    audio.speak(message)
-            except json.JSONDecodeError:
-                audio.speak(message)
-        else:
+        # 2. if its a string speak
+        elif isinstance(message, str):
+            print(f"\n[Audio Thread] Priority {priority}: {message}")
             audio.speak(message)
 
         audio_queue.task_done()

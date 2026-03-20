@@ -167,9 +167,11 @@ class AerialObstacleDetector:
             if current_time - self.last_alarm_time >= 10.0:
                 # print("SPATIAL BEEP! AERIAL DANGER CONFIRMED 🚨")
 
-                cmd = json.dumps(
-                    {"position": "center", "frequencyCenter": 800, "frequencySide": 800}
-                )
+                cmd = {
+                    "action": "sound",
+                    "position": "center",
+                    "sound_type": "aerial",
+                }
                 self.audio_queue.put(AudioPriorityQueue.AIR_OBSTACLE, cmd)
                 self.last_alarm_time = current_time
 
