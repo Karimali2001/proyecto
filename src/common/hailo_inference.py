@@ -1,19 +1,27 @@
+"""
+https://github.com/hailo-ai/Hailo-Application-Code-Examples/tree/main/runtime/python/common
+
+Code by: Hailo's Repository
+"""
+
 from typing import Tuple, Dict, List
 from typing import Callable, Optional
 from functools import partial
 import numpy as np
 
-from hailo_platform import (HEF, VDevice,FormatType, HailoSchedulingAlgorithm)
+from hailo_platform import HEF, VDevice, FormatType, HailoSchedulingAlgorithm
 from hailo_platform.pyhailort.pyhailort import FormatOrder
-
 
 
 class HailoInfer:
     def __init__(
-        self, hef_path: str, batch_size: int = 1,
-            input_type: Optional[str] = None, output_type: Optional[str] = None,
-            priority: Optional[int] = 0) -> None:
-
+        self,
+        hef_path: str,
+        batch_size: int = 1,
+        input_type: Optional[str] = None,
+        output_type: Optional[str] = None,
+        priority: Optional[int] = 0,
+    ) -> None:
         """
         Initialize the HailoAsyncInference class to perform asynchronous inference using a Hailo HEF model.
 
@@ -45,7 +53,6 @@ class HailoInfer:
         self.configured_model.set_scheduler_priority(priority)
         self.last_infer_job = None
 
-
     def _set_input_type(self, input_type: Optional[str] = None) -> None:
         """
         Set the input type for the HEF model. If the model has multiple inputs,
@@ -70,7 +77,10 @@ class HailoInfer:
         self.nms_postprocess_enabled = False
 
         # If the model uses HAILO_NMS_WITH_BYTE_MASK format (e.g.,instance segmentation),
-        if self.infer_model.outputs[0].format.order == FormatOrder.HAILO_NMS_WITH_BYTE_MASK:
+        if (
+            self.infer_model.outputs[0].format.order
+            == FormatOrder.HAILO_NMS_WITH_BYTE_MASK
+        ):
             # Use UINT8 and skip setting output formats
             self.nms_postprocess_enabled = True
             self.output_type = self._output_data_type2dict("UINT8")
@@ -83,25 +93,20 @@ class HailoInfer:
         for name, dtype in self.output_type.items():
             self.infer_model.output(name).set_format_type(getattr(FormatType, dtype))
 
-
     def get_vstream_info(self) -> Tuple[list, list]:
-
         """
         Get information about input and output stream layers.
 
         Returns:
-            Tuple[list, list]: List of input stream layer information, List of 
+            Tuple[list, list]: List of input stream layer information, List of
                                output stream layer information.
         """
-        return (
-            self.hef.get_input_vstream_infos(), 
-            self.hef.get_output_vstream_infos()
-        )
+        return (self.hef.get_input_vstream_infos(), self.hef.get_output_vstream_infos())
 
     def get_hef(self) -> HEF:
         """
         Get a HEF instance
-        
+
         Returns:
             HEF: A HEF (Hailo Executable File) containing the model.
         """
@@ -115,7 +120,6 @@ class HailoInfer:
             Tuple[int, ...]: Shape of the model's input layer.
         """
         return self.hef.get_input_vstream_infos()[0].shape  # Assumes one input
-
 
     def run(self, input_batch: List[np.ndarray], inference_callback_fn) -> object:
         """
@@ -138,8 +142,7 @@ class HailoInfer:
 
         # Launch async inference and attach the result handler
         self.last_infer_job = self.configured_model.run_async(
-            bindings_list,
-            partial(inference_callback_fn, bindings_list=bindings_list)
+            bindings_list, partial(inference_callback_fn, bindings_list=bindings_list)
         )
 
     def create_bindings(self, configured_model, input_batch):
@@ -158,7 +161,7 @@ class HailoInfer:
             output_buffers = {
                 name: np.empty(
                     self.infer_model.output(name).shape,
-                    dtype=(getattr(np, self.output_type[name].lower()))
+                    dtype=(getattr(np, self.output_type[name].lower())),
                 )
                 for name in self.output_type
             }
@@ -168,8 +171,6 @@ class HailoInfer:
             return binding
 
         return [frame_binding(frame) for frame in input_batch]
-
-
 
     def is_nms_postprocess_enabled(self) -> bool:
         """
@@ -201,11 +202,12 @@ class HailoInfer:
                 data_type_dict[name] = hef_type
             else:
                 if data_type.lower() not in valid_types:
-                    raise ValueError(f"Invalid data_type: {data_type}. Must be one of {valid_types}")
+                    raise ValueError(
+                        f"Invalid data_type: {data_type}. Must be one of {valid_types}"
+                    )
                 data_type_dict[name] = data_type
 
         return data_type_dict
-
 
     def close(self):
 

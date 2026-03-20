@@ -1,5 +1,4 @@
 import time
-import json
 
 from threading import Thread
 from pathlib import Path
@@ -45,7 +44,7 @@ def audio_consumer_thread():
                 position=message.get("position", "center"),
                 sound_type=message.get("sound_type", "ui"),
             )
-            time.sleep(0.2)  # Pequeña pausa
+            time.sleep(0.2)  # Short pause
 
         # 2. if its a string speak
         elif isinstance(message, str):

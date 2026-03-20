@@ -1,3 +1,11 @@
+
+"""
+https://github.com/hailo-ai/Hailo-Application-Code-Examples/tree/main/runtime/python/common
+
+Code by: Hailo's Repository
+"""
+
+
 from typing import List, Generator, Optional, Tuple, Dict, Callable ,Any
 from pathlib import Path
 from loguru import logger

@@ -5,7 +5,7 @@ import pygame
 import numpy as np
 
 
-# RUTA AL BINARIO DE PIPER
+# PATH TO PIPER BINARY
 PIPER_PATH = "/home/kness/Desktop/proyecto/venv/bin/piper"
 BASE_DIRECTORY = Path.cwd()
 MODEL_PATH = BASE_DIRECTORY / "assets/es_MX-claude-high.onnx"
@@ -19,79 +19,86 @@ class Audio:
         self.current_process = None
         self.stop_flag = False
 
-        print("[Audio] Sintetizando sonidos en memoria RAM...")
-        # 🔥 EL SINTETIZADOR INTERNO: Latencia cero, sin archivos externos 🔥
+        print("[Audio] Synthesizing sounds in RAM...")
+        # INTERNAL SYNTHESIZER: Zero latency, no external files
         self.sound_bank = {
-            # 1. HUECO: Empieza en 300Hz y cae rápidamente a 50Hz (onda triangular, suena a caída/peligro grave)
+            # 1. HOLE: Starts at 300Hz and drops quickly to 50Hz (triangle wave, sounds like a fall/serious danger)
             "hole": self._create_synth_sound(
                 300, 50, 0.4, wave_type="triangle", volume=1.0
             ),
-            # 2. AÉREO: Empieza en 1200Hz y sube a 1500Hz (onda senoidal pura, suena a radar/cristal/ping!)
+            # 2. AERIAL: Starts at 1200Hz and rises to 1500Hz (pure sine wave, sounds like a radar/glass/ping!)
             "aerial": self._create_synth_sound(
                 1200, 1500, 0.2, wave_type="sine", volume=0.7
             ),
-            # 3. UI/BOTONES: Un "bloop" rápido de 600Hz a 400Hz
+            # 3. UI/BUTTONS: A quick "bloop" from 600Hz to 400Hz
             "ui": self._create_synth_sound(600, 400, 0.1, wave_type="sine", volume=0.7),
+            "sonar_left": self._create_synth_sound(
+                400, 400, 0.1, wave_type="triangle", volume=1.0
+            ),
+            "sonar_center": self._create_synth_sound(
+                600, 600, 0.1, wave_type="triangle", volume=1.0
+            ),
+            "sonar_right": self._create_synth_sound(
+                800, 800, 0.1, wave_type="triangle", volume=1.0
+            ),
         }
 
     def _create_synth_sound(
         self, start_freq, end_freq, duration, wave_type="sine", volume=0.8
     ):
-        """Genera un sonido sintetizado matemáticamente con barrido de frecuencia y envolvente."""
+        """Generates a mathematically synthesized sound with a frequency sweep and envelope."""
         n_samples = int(self.sample_rate * duration)
         t = np.linspace(0, duration, n_samples, False)
 
-        # Barrido de frecuencia (Dinámico)
+        # Frequency Sweep (Dynamic)
         freqs = np.linspace(start_freq, end_freq, n_samples)
         phase = np.cumsum(freqs) / self.sample_rate
 
-        # Generador de Forma de Onda
+        # Waveform Generator
         if wave_type == "sine":
-            wave = np.sin(2 * np.pi * phase)  # Suave y limpio
+            wave = np.sin(2 * np.pi * phase)  # Smooth and clean
         elif wave_type == "square":
-            wave = np.sign(np.sin(2 * np.pi * phase))  # Ruidoso y robótico
+            wave = np.sign(np.sin(2 * np.pi * phase))  # Noisy and robotic
         elif wave_type == "triangle":
             wave = (
                 2 * np.abs(2 * (phase - np.floor(phase + 0.5))) - 1
-            )  # Intermedio (zumbido)
+            )  # Intermediate (buzz)
 
-        # Envolvente (Fade out rápido para que suene como un "golpe" y no un timbre continuo)
+        # Envelope (Quick fade out to sound like a "hit" and not a continuous ring)
         envelope = np.exp(-5 * t / duration)
         wave = wave * envelope * volume
 
-        # Convertir a audio PCM de 16-bits estéreo
+        # Convert to 16-bit stereo PCM audio
         audio = np.int16(wave * 32767)
         stereo = np.column_stack((audio, audio))
         return pygame.sndarray.make_sound(stereo)
 
     def play_spatial_sound(self, position="center", sound_type="ui"):
-        """Reproduce un sonido sintetizado en el canal espacial indicado."""
+
+        if sound_type == "sonar":
+            sound_type = f"sonar_{position}"
+
         sound = self.sound_bank.get(sound_type)
         if not sound:
             return
 
         channel = sound.play()
         if channel:
-            # Paneo 3D
             if position == "center":
-                channel.set_volume(1.0, 1.0)  # Izquierda y Derecha al máximo
+                channel.set_volume(1.0, 1.0)
             elif position == "left":
-                channel.set_volume(1.0, 0.0)  # Solo Izquierda
+                channel.set_volume(1.0, 0.0)
             elif position == "right":
-                channel.set_volume(0.0, 1.0)  # Solo Derecha
-
-            print(
-                f"🔊 [Efecto de Sonido] Tipo: '{sound_type}' | Posición: '{position.upper()}'"
-            )
+                channel.set_volume(0.0, 1.0)
 
     def speak(self, text, length_scale="1.0"):
         self.stop_flag = False
 
         if not Path(PIPER_PATH).exists() or not MODEL_PATH.exists():
-            print(f"[ERROR]: Faltan binarios o modelo de Piper.")
+            print(f"[ERROR]: Piper binaries or model are missing.")
             return
 
-        print(f"🗣️ Sintetizando voz: '{text}'")
+        print(f"[Audio] Synthesizing voice: '{text}'")
         temp_wav = "/tmp/karim_voz.wav"
         command = f'echo "{text}" | {PIPER_PATH} --model {MODEL_PATH} --length_scale {length_scale} --output_file {temp_wav} 2>/dev/null'
 
@@ -120,14 +127,14 @@ class Audio:
 
     def speak_thread(self):
         self.speak(
-            "Sistema de audio. Sin avisos de error y funcionando en estéreo.", "1.0"
+            "Audio system. No error warnings and running in stereo.", "1.0"
         )
 
 
 if __name__ == "__main__":
     audio = Audio()
 
-    # Prueba del nuevo sintetizador
+    # Test the new synthesizer
     time.sleep(1)
     audio.play_spatial_sound("left", "hole")
     time.sleep(1)

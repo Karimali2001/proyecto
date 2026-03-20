@@ -23,46 +23,46 @@ class ObjectDetector:
         self.camera_driver = camera_driver
         self.hailo_driver = hailo_driver
         self.audio_queue = audio_queue
-
         self.video_w = video_w
         self.video_h = video_h
-
         self.raw_detections = []
 
-        # 1. Stabilization Filter (Last 5 frames)
         self.detection_history = collections.deque(maxlen=5)
 
-        # 2. Initialize the Tracker (ByteTrack)
         tracker_args = SimpleNamespace(
             track_thresh=0.4, track_buffer=30, match_thresh=0.8, mot20=False
         )
         self.tracker = BYTETracker(tracker_args, frame_rate=15)
 
-        # 3. Short-term memories for Vehicle Tracking
-        self.vehicle_history = {}  # track_id -> deque of coordinates (x, y)
-        self.vehicle_cooldown = {}  # track_id -> time of the last warning
-
-        # 4. GLOBAL Memory for Traffic Lights (Avoids spam if ID is lost)
+        self.vehicle_history = {}
+        self.vehicle_cooldown = {}
         self.global_tl_color = None
         self.global_tl_warn_time = 0.0
 
+        # Seat Finder Memory
+        self.seat_finder_mode = False
+        self.seat_state = 0
+        self.seat_last_seen = 0.0
+        self.last_seat_beep = 0.0
+        self.last_seat_ratio = 0.0  # NEW SIZE MEMORY
+
+    def toggle_seat_finder(self):
+        self.seat_finder_mode = not self.seat_finder_mode
+        if self.seat_finder_mode:
+            self.seat_state = 0
+            self.seat_last_seen = time.time()
+            self.last_seat_ratio = 0.0
+        return self.seat_finder_mode
+
     def getLastDetection(self):
-        """Returns objects that have appeared in at least 3 of the last 5 frames."""
         if len(self.detection_history) == 0:
             return []
-
         counter = collections.Counter()
         for frame_objects in self.detection_history:
             for obj in frame_objects:
                 counter[obj] += 1
-
-        # We require stability: must be in >= 3 frames
         threshold = 3 if len(self.detection_history) == 5 else 1
-        stable_detections = [
-            obj for obj, count in counter.items() if count >= threshold
-        ]
-
-        return stable_detections
+        return [obj for obj, count in counter.items() if count >= threshold]
 
     def getRawDetections(self):
         return self.raw_detections
@@ -71,172 +71,196 @@ class ObjectDetector:
         self.raw_detections = detections
 
     def _get_traffic_light_color(self, frame, box):
-        """Analyzes whether the traffic light is Red, Yellow, Green, or Off."""
         x1, y1, x2, y2 = map(int, box)
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
-
         crop = frame[y1:y2, x1:x2]
         if crop.size == 0:
             return "error"
 
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-
-        # Color masks
         mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
         mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
-
         mask_yellow = cv2.inRange(hsv, np.array([15, 50, 50]), np.array([35, 255, 255]))
         mask_green = cv2.inRange(hsv, np.array([40, 50, 50]), np.array([90, 255, 255]))
 
-        # Count the bright pixels
-        red_pixels = cv2.countNonZero(mask_red)
-        yellow_pixels = cv2.countNonZero(mask_yellow)
-        green_pixels = cv2.countNonZero(mask_green)
-
-        # Find the dominant color
-        colors = {"red": red_pixels, "yellow": yellow_pixels, "green": green_pixels}
-        dominant_color = max(colors, key=colors.get)
-
-        # 🔥 THE NEW RULE 🔥
-        # If not even the dominant color can exceed 20 pixels,
-        # it means the lamp is not emitting light (it is damaged or off).
-        if colors[dominant_color] > 20:
-            return dominant_color
-
+        colors = {
+            "red": cv2.countNonZero(mask_red),
+            "yellow": cv2.countNonZero(mask_yellow),
+            "green": cv2.countNonZero(mask_green),
+        }
+        dominant = max(colors, key=colors.get)
+        if colors[dominant] > 20:
+            return dominant
         return "off"
 
     def _compute_iou(self, boxA, boxB):
-        """Calculates the overlap index to map the Tracker ID to the YOLO Class."""
-        xA = max(boxA[0], boxB[0])
-        yA = max(boxA[1], boxB[1])
-        xB = min(boxA[2], boxB[2])
-        yB = min(boxA[3], boxB[3])
+        xA, yA = max(boxA[0], boxB[0]), max(boxA[1], boxB[1])
+        xB, yB = min(boxA[2], boxB[2]), min(boxA[3], boxB[3])
         interArea = max(0, xB - xA) * max(0, yB - yA)
         if interArea == 0:
             return 0
-        boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
-        boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
-        return interArea / float(boxAArea + boxBArea - interArea)
+        return interArea / float(
+            ((boxA[2] - boxA[0]) * (boxA[3] - boxA[1]))
+            + ((boxB[2] - boxB[0]) * (boxB[3] - boxB[1]))
+            - interArea
+        )
 
     def process_frame(self, frame):
         try:
-            detections = self.hailo_driver.infer(frame)
             detections = self.hailo_driver.extract_detections(
-                detections, self.video_w, self.video_h
+                self.hailo_driver.infer(frame), self.video_w, self.video_h
             )
             self.setRawDetections(detections)
-
             if len(detections) == 0:
                 self.detection_history.append([])
                 return
 
-            # 1. Prepare YOLO boxes for ByteTrack: [x1, y1, x2, y2, score]
-            dets_for_tracker = []
-            for det in detections:
-                name, bbox, score = det
-                dets_for_tracker.append([bbox[0], bbox[1], bbox[2], bbox[3], score])
-
-            dets_for_tracker = np.array(dets_for_tracker)
-
-            # 2. Update the Tracker to give each object a unique ID
+            dets_for_tracker = np.array(
+                [[d[1][0], d[1][1], d[1][2], d[1][3], d[2]] for d in detections]
+            )
             online_targets = self.tracker.update(dets_for_tracker)
-
             current_frame_objects = []
 
             for track in online_targets:
-                track_id = track.track_id
-                x1, y1, x2, y2 = track.tlbr
-
-                # 3. Pair the Tracker ID with the YOLO name using IoU
-                best_iou = 0
-                best_det = None
+                best_iou, best_det = 0, None
                 for det in detections:
                     iou = self._compute_iou(track.tlbr, det[1])
                     if iou > best_iou:
-                        best_iou = iou
-                        best_det = det
-
+                        best_iou, best_det = iou, det
                 if not best_det:
                     continue
 
-                name, bbox, score = best_det
+                name, _, _ = best_det
                 translated_name = translations.get(name, name)
-
-                # Calculate the direction (Clock)
-                x_center = (x1 + x2) / 2
-                ratio = x_center / self.video_w
-                hour = round(9 + (ratio * 6))
+                hour = round(
+                    9 + (((track.tlbr[0] + track.tlbr[2]) / 2) / self.video_w * 6)
+                )
                 if hour > 12:
                     hour -= 12
+                current_frame_objects.append(f"{translated_name} at {hour}")
 
-                # Add to the frame's list for the manual report of button 1
-                current_frame_objects.append(f"{translated_name} a las {hour}")
-
-                # ==========================================
-                # AUTOMATIC LOGIC 1: TRAFFIC LIGHTS (GLOBAL MEMORY)
-                # ==========================================
                 if name == "traffic light" and self.audio_queue:
                     color = self._get_traffic_light_color(frame, track.tlbr)
-
                     if color != "error":
-                        current_time = time.time()
-                        time_since_last_warn = current_time - self.global_tl_warn_time
-
-                        # Conditions to warn: Color change OR 3 minutes passed
-                        if (
-                            color != self.global_tl_color and time_since_last_warn > 3.0
-                        ) or (time_since_last_warn > 180.0):
-                            print(f"[ObjectDetector] Traffic light detected in {color}!")
-
-                            # 🔥 Dynamic message based on status 🔥
-                            if color == "off":
-                                audio_message = f"Caution, traffic light at {hour} is off or damaged"
-                            else:
-                                audio_message = f"Traffic light at {hour} in {color}"
-
+                        tslw = time.time() - self.global_tl_warn_time
+                        if (color != self.global_tl_color and tslw > 3.0) or (
+                            tslw > 180.0
+                        ):
+                            msg = (
+                                f"Caution, traffic light at {hour} is off or damaged"
+                                if color == "off"
+                                else f"Traffic light at {hour} in {color}"
+                            )
                             self.audio_queue.put(
-                                AudioPriorityQueue.DANGEROUS_OBJECTS, audio_message
+                                AudioPriorityQueue.DANGEROUS_OBJECTS, msg
+                            )
+                            self.global_tl_color, self.global_tl_warn_time = (
+                                color,
+                                time.time(),
                             )
 
-                            # Update the global memory
-                            self.global_tl_color = color
-                            self.global_tl_warn_time = current_time
-
-                # ==========================================
-                # AUTOMATIC LOGIC 2: MOVING VEHICLES
-                # ==========================================
                 if name in ["car", "bus", "motorcycle", "truck"] and self.audio_queue:
-                    y_center = (y1 + y2) / 2
-
-                    if track_id not in self.vehicle_history:
-                        self.vehicle_history[track_id] = collections.deque(maxlen=10)
-
-                    self.vehicle_history[track_id].append((x_center, y_center))
-
-                    # If we have enough frames to evaluate movement
-                    if len(self.vehicle_history[track_id]) >= 5:
-                        old_x, old_y = self.vehicle_history[track_id][0]
-
-                        # Calculate how many pixels it moved
-                        dist = np.sqrt(
-                            (x_center - old_x) ** 2 + (y_center - old_y) ** 2
+                    y_c, x_c = (
+                        (track.tlbr[1] + track.tlbr[3]) / 2,
+                        (track.tlbr[0] + track.tlbr[2]) / 2,
+                    )
+                    if track.track_id not in self.vehicle_history:
+                        self.vehicle_history[track.track_id] = collections.deque(
+                            maxlen=10
                         )
-                        last_warn = self.vehicle_cooldown.get(track_id, 0)
-
-                        # If it moved more than 40 pixels and we haven't warned in the last 5 seconds
-                        if dist > 40 and (time.time() - last_warn > 5.0):
-                            print(
-                                f"[ObjectDetector] Moving vehicle detected! ID: {track_id}"
-                            )
+                    self.vehicle_history[track.track_id].append((x_c, y_c))
+                    if len(self.vehicle_history[track.track_id]) >= 5:
+                        old_x, old_y = self.vehicle_history[track.track_id][0]
+                        if np.sqrt((x_c - old_x) ** 2 + (y_c - old_y) ** 2) > 40 and (
+                            time.time() - self.vehicle_cooldown.get(track.track_id, 0)
+                            > 5.0
+                        ):
                             self.audio_queue.put(
                                 AudioPriorityQueue.DANGEROUS_OBJECTS,
                                 f"Caution, moving {translated_name} at {hour}",
                             )
-                            self.vehicle_cooldown[track_id] = time.time()
+                            self.vehicle_cooldown[track.track_id] = time.time()
 
-            # Save the objects in the stabilization history
+            # ==========================================
+            # FINDER STATE MACHINE
+            # ==========================================
+            if self.seat_finder_mode and self.audio_queue:
+                persons = [det[1] for det in detections if det[0] == "person"]
+                seats = [det for det in detections if det[0] in ["chair", "couch"]]
+                best_seat, max_area = None, 0
+
+                for seat in seats:
+                    s_box = seat[1]
+                    is_occupied = False
+                    for p_box in persons:
+                        if self._compute_iou(s_box, p_box) > 0.05 or (
+                            s_box[0] < (p_box[0] + p_box[2]) / 2 < s_box[2]
+                            and s_box[1] < (p_box[1] + p_box[3]) / 2 < s_box[3]
+                        ):
+                            is_occupied = True
+                            break
+                    if not is_occupied:
+                        area = (s_box[2] - s_box[0]) * (s_box[3] - s_box[1])
+                        if area > max_area:
+                            max_area, best_seat = area, seat
+
+                current_time = time.time()
+
+                if best_seat:
+                    s_box = best_seat[1]
+                    ratio = max_area / (self.video_w * self.video_h)
+                    self.last_seat_ratio = ratio  # Save size memory
+
+                    if ratio > 0.20:  # Direct arrival
+                        self.audio_queue.put(
+                            AudioPriorityQueue.OBJECT_DETECTION, "Arrived at your seat"
+                        )
+                        self.toggle_seat_finder()
+                    else:
+                        if self.seat_state == 0:
+                            self.seat_state = 1
+                        self.seat_last_seen = current_time
+
+                        x_c = (s_box[0] + s_box[2]) / 2
+                        if x_c < self.video_w * 0.35:
+                            pos = "left"
+                        elif x_c > self.video_w * 0.65:
+                            pos = "right"
+                        else:
+                            pos = "center"
+
+                        interval = max(0.15, 1.0 - (ratio * 2.5))
+                        if current_time - self.last_seat_beep > interval:
+                            self.audio_queue.put(
+                                AudioPriorityQueue.OBJECT_DETECTION,
+                                {
+                                    "action": "sound",
+                                    "position": pos,
+                                    "sound_type": "sonar",
+                                },
+                            )
+                            self.last_seat_beep = current_time
+                else:
+                    if self.seat_state == 1 and (
+                        current_time - self.seat_last_seen > 1.5
+                    ):
+                        # SMART ARRIVAL CHECK
+                        # If we lost the chair but before it was big (>= 8% screen), sure user sat/turned
+                        if self.last_seat_ratio > 0.08:
+                            self.audio_queue.put(
+                                AudioPriorityQueue.OBJECT_DETECTION,
+                                "Arrived at your seat",
+                            )
+                            self.toggle_seat_finder()
+                        else:
+                            self.audio_queue.put(
+                                AudioPriorityQueue.OBJECT_DETECTION,
+                                "Reference lost",
+                            )
+                            self.seat_state = 0
+
             self.detection_history.append(current_frame_objects)
 
         except Exception as e:
