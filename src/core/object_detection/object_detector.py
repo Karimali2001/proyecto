@@ -90,7 +90,7 @@ class ObjectDetector:
             "amarillo": cv2.countNonZero(mask_yellow),
             "verde": cv2.countNonZero(mask_green),
         }
-        dominant = max(colors, key=colors.get)
+        dominant = max(colors, key=colors.get)  # type: ignore
         if colors[dominant] > 20:
             return dominant
         return "apagado"
@@ -154,38 +154,59 @@ class ObjectDetector:
                 #                 else f"Semáforo a las {hour} en {color}"
                 #             )
                 #             self.audio_queue.put(
-                #                 AudioPriorityQueue.DANGEROUS_OBJECTS, msg
+                #                 AudioPriorityQueue.SEMAPHORE, msg
                 #             )
                 #             self.global_tl_color, self.global_tl_warn_time = (
                 #                 color,
                 #                 time.time(),
                 #             )
 
-                # if (
-                #     False
-                #     and name in ["car", "bus", "motorcycle", "truck"]
-                #     and self.audio_queue
-                # ):
-                #     y_c, x_c = (
-                #         (track.tlbr[1] + track.tlbr[3]) / 2,
-                #         (track.tlbr[0] + track.tlbr[2]) / 2,
-                #     )
-                #     if track.track_id not in self.vehicle_history:
-                #         self.vehicle_history[track.track_id] = collections.deque(
-                #             maxlen=10
-                #         )
-                #     self.vehicle_history[track.track_id].append((x_c, y_c))
-                #     if len(self.vehicle_history[track.track_id]) >= 5:
-                #         old_x, old_y = self.vehicle_history[track.track_id][0]
-                #         if np.sqrt((x_c - old_x) ** 2 + (y_c - old_y) ** 2) > 40 and (
-                #             time.time() - self.vehicle_cooldown.get(track.track_id, 0)
-                #             > 5.0
-                #         ):
-                #             self.audio_queue.put(
-                #                 AudioPriorityQueue.DANGEROUS_OBJECTS,
-                #                 f"Precaución, {translated_name} en movimiento a las {hour}",
-                #             )
-                #             self.vehicle_cooldown[track.track_id] = time.time()
+                if name in ["car", "bus", "motorcycle", "truck"] and self.audio_queue:
+                    # 1. Calculamos el ÁREA del vehículo, no su centro
+                    w = track.tlbr[2] - track.tlbr[0]
+                    h = track.tlbr[3] - track.tlbr[1]
+                    area = w * h
+
+                    if track.track_id not in self.vehicle_history:
+                        self.vehicle_history[track.track_id] = collections.deque(
+                            maxlen=10
+                        )
+
+                        # ANTI-SPAM: Solo te avisa de carros estacionados UNA VEZ
+                        # y SOLO si están en tu camino directo (a las 11, 12 o 1)
+                        if hour in [11, 12, 1]:
+                            self.audio_queue.play_concurrent(
+                                {
+                                    "action": "fast_voice",
+                                    "text": f"{translated_name} a las {hour}",
+                                }
+                            )
+                        # Registramos el tiempo para no repetir
+                        self.vehicle_cooldown[track.track_id] = time.time()
+
+                    # Guardamos el área en el historial
+                    self.vehicle_history[track.track_id].append(area)
+
+                    # 2. DETECCIÓN DE MOVIMIENTO REAL (EFECTO LOOMING)
+                    if len(self.vehicle_history[track.track_id]) >= 5:
+                        old_area = self.vehicle_history[track.track_id][0]
+
+                        # Si el área creció un 15% o más en apenas 5 frames, viene directo hacia ti
+                        # (O tú vas caminando muy rápido directo hacia él)
+                        if old_area > 0 and (area / old_area) > 1.15:
+                            # Cooldown de 4 segundos para emergencias
+                            if (
+                                time.time()
+                                - self.vehicle_cooldown.get(track.track_id, 0)
+                                > 4.0
+                            ):
+                                self.audio_queue.play_concurrent(
+                                    {
+                                        "action": "fast_voice",
+                                        "text": f"¡Cuidado! {translated_name} acercándose",
+                                    }
+                                )
+                                self.vehicle_cooldown[track.track_id] = time.time()
 
             # ==========================================
             # FINDER STATE MACHINE

@@ -15,22 +15,22 @@ class Audio:
     def __init__(self, sample_rate=44100):
         pygame.mixer.pre_init(sample_rate, -16, 2, 512)
         pygame.mixer.init()
+        # Reservamos el canal 0 estrictamente para la voz principal
+        pygame.mixer.set_reserved(1)
+        self.voice_channel = pygame.mixer.Channel(0)
+
         self.sample_rate = sample_rate
         self.current_process = None
         self.stop_flag = False
 
         print("[Audio] Synthesizing sounds in RAM...")
-        # INTERNAL SYNTHESIZER: Zero latency, no external files
         self.sound_bank = {
-            # 1. HOLE: Starts at 300Hz and drops quickly to 50Hz (triangle wave, sounds like a fall/serious danger)
             "hole": self._create_synth_sound(
                 300, 50, 0.4, wave_type="triangle", volume=1.0
             ),
-            # 2. AERIAL: Starts at 1200Hz and rises to 1500Hz (pure sine wave, sounds like a radar/glass/ping!)
             "aerial": self._create_synth_sound(
                 1200, 1500, 0.2, wave_type="sine", volume=0.7
             ),
-            # 3. UI/BUTTONS: A quick "bloop" from 600Hz to 400Hz
             "ui": self._create_synth_sound(600, 400, 0.1, wave_type="sine", volume=0.7),
             "sonar_left": self._create_synth_sound(
                 400, 400, 0.1, wave_type="triangle", volume=1.0
@@ -46,35 +46,27 @@ class Audio:
     def _create_synth_sound(
         self, start_freq, end_freq, duration, wave_type="sine", volume=0.8
     ):
-        """Generates a mathematically synthesized sound with a frequency sweep and envelope."""
         n_samples = int(self.sample_rate * duration)
         t = np.linspace(0, duration, n_samples, False)
 
-        # Frequency Sweep (Dynamic)
         freqs = np.linspace(start_freq, end_freq, n_samples)
         phase = np.cumsum(freqs) / self.sample_rate
 
-        # Waveform Generator
         if wave_type == "sine":
-            wave = np.sin(2 * np.pi * phase)  # Smooth and clean
+            wave = np.sin(2 * np.pi * phase)
         elif wave_type == "square":
-            wave = np.sign(np.sin(2 * np.pi * phase))  # Noisy and robotic
+            wave = np.sign(np.sin(2 * np.pi * phase))
         elif wave_type == "triangle":
-            wave = (
-                2 * np.abs(2 * (phase - np.floor(phase + 0.5))) - 1
-            )  # Intermediate (buzz)
+            wave = 2 * np.abs(2 * (phase - np.floor(phase + 0.5))) - 1
 
-        # Envelope (Quick fade out to sound like a "hit" and not a continuous ring)
         envelope = np.exp(-5 * t / duration)
         wave = wave * envelope * volume
 
-        # Convert to 16-bit stereo PCM audio
         audio = np.int16(wave * 32767)
         stereo = np.column_stack((audio, audio))
         return pygame.sndarray.make_sound(stereo)
 
     def play_spatial_sound(self, position="center", sound_type="ui"):
-
         if sound_type == "sonar":
             sound_type = f"sonar_{position}"
 
@@ -82,14 +74,30 @@ class Audio:
         if not sound:
             return
 
-        channel = sound.play()
+        # find_channel() busca un canal libre (ignora el 0 que está reservado)
+        channel = pygame.mixer.find_channel()
         if channel:
+            channel.play(sound)
             if position == "center":
                 channel.set_volume(1.0, 1.0)
             elif position == "left":
                 channel.set_volume(1.0, 0.0)
             elif position == "right":
                 channel.set_volume(0.0, 1.0)
+
+    def speak_fast_background(self, text, length_scale="0.6"):
+        """Synthesizes and plays a very fast voice on a secondary channel (does NOT cut off the main voice)"""
+        temp_wav = f"/tmp/karim_fast_{time.time()}.wav"
+        command = f'echo "{text}" | {PIPER_PATH} --model {MODEL_PATH} --length_scale {length_scale} --output_file {temp_wav} 2>/dev/null'
+
+        subprocess.run(command, shell=True)
+        try:
+            fast_voice = pygame.mixer.Sound(temp_wav)
+            channel = pygame.mixer.find_channel()
+            if channel:
+                channel.play(fast_voice)
+        except Exception as e:
+            print(f"[ERROR] Pygame failed to play fast voice: {e}")
 
     def speak(self, text, length_scale="1.0"):
         self.stop_flag = False
@@ -111,43 +119,32 @@ class Audio:
 
         try:
             voice = pygame.mixer.Sound(temp_wav)
-            voice.play()
-            while pygame.mixer.get_busy():
+            self.voice_channel.play(voice)
+            while self.voice_channel.get_busy():
                 if self.stop_flag:
+                    self.voice_channel.stop()
                     break
                 time.sleep(0.1)
         except Exception as e:
             print(f"[ERROR] Pygame failed to play the voice: {e}")
 
     def stop(self):
+        """Stops main voice immediately and terminates any ongoing synthesis process"""
         self.stop_flag = True
-        pygame.mixer.stop()
+        self.voice_channel.stop()
         if self.current_process is not None:
             self.current_process.terminate()
 
-    def speak_thread(self):
-        self.speak("Sistema de audio inicializado y funcionando al cien", "1.0")
-
     def is_busy(self):
-        """
-        is there a process currently synthesizing voice?
-        """
-        # 1.
         if self.current_process is not None and self.current_process.poll() is None:
             return True
-
-        # 2. Is the speaker physically playing sound at this moment?
-        if pygame.mixer.get_busy():
+        if self.voice_channel.get_busy():
             return True
-
-        # If we reach here, there is absolute silence
         return False
 
 
 if __name__ == "__main__":
     audio = Audio()
-
-    # Test the new synthesizer
     time.sleep(1)
     audio.play_spatial_sound("left", "hole")
     time.sleep(1)
@@ -155,5 +152,4 @@ if __name__ == "__main__":
     time.sleep(1)
     audio.play_spatial_sound("center", "ui")
     time.sleep(1)
-
     audio.stop()

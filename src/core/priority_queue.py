@@ -5,12 +5,12 @@ import time
 
 class AudioPriorityQueue:
     HOLE_DETECTION = 1
-    DANGEROUS_OBJECTS = 2
-    AIR_OBSTACLE = 3
-    VOICE_MENU = 4
-    OBJECT_DETECTION = 5
-    TEXT_RECOGNITION = 5
-    NAVIGATION = 6
+    SEMAPHORE = 2
+    # AIR_OBSTACLE 
+    VOICE_MENU = 3
+    OBJECT_DETECTION = 4
+    TEXT_RECOGNITION = 4
+    NAVIGATION = 5
 
     def __init__(self, audio_driver):
         """
@@ -33,6 +33,36 @@ class AudioPriorityQueue:
         self.current_priority = float("inf")
         self.lock = Lock()
         self.counter = 0  # To preserve FIFO for same priority
+
+    def play_concurrent(self, message):
+        """
+        Dispara sonidos o voces rápidas inmediatamente en el Canal 1.
+        Si el diccionario está incompleto, aborta en silencio.
+        """
+        if isinstance(message, dict):
+            action = message.get("action")
+            
+            if action == "sound":
+                sound_type = message.get("sound_type")
+                position = message.get("position")
+                
+                # Si falta el tipo de sonido o la posición, no hacemos nada
+                if not sound_type or not position:
+                    return
+                    
+                self.audio_driver.play_spatial_sound(
+                    position=position,
+                    sound_type=sound_type
+                )
+                
+            elif action == "fast_voice":
+                text = message.get("text")
+                
+                # Si falta el texto, no hablamos nada
+                if not text:
+                    return
+                    
+                self.audio_driver.speak_fast_background(text)
 
     def put(self, priority, message):
         """

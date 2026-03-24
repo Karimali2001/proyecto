@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 import time
-import json
 from src.core.priority_queue import AudioPriorityQueue
 
 
@@ -172,7 +171,8 @@ class AerialObstacleDetector:
                     "position": "center",
                     "sound_type": "aerial",
                 }
-                self.audio_queue.put(AudioPriorityQueue.AIR_OBSTACLE, cmd)
+
+                self.audio_queue.play_concurrent(cmd)
                 self.last_alarm_time = current_time
 
                 # Save evidence
