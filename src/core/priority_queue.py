@@ -1,5 +1,6 @@
 import queue
 from threading import Lock
+import time
 
 
 class AudioPriorityQueue:
@@ -73,3 +74,12 @@ class AudioPriorityQueue:
                     return True
 
             return False
+
+    def wait_for_priority(self, target_priority):
+        """
+        Blocks until there are no active or queued tasks of the specified priority.
+
+        """
+        # We check in a loop with a small sleep to avoid busy waiting, since the queue doesn't provide a direct way to wait for a specific priority to clear.
+        while self.is_priority_active_or_queued(target_priority):
+            time.sleep(0.05)

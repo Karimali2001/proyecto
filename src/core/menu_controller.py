@@ -35,6 +35,7 @@ class MenuController:
 
         # semaphore to prevent double command
         self.last_both_pressed = 0.0
+        self.is_voice_active = False
 
         self.last_btn_2_press = 0.0
         self.btn_2_timer = None
@@ -44,11 +45,17 @@ class MenuController:
         self.btn_2.when_pressed = self.handle_btn_2
 
     def handle_btn_1(self):
+        # We add a small delay to allow for the possibility of the other button being pressed for a combined command
+        if self.is_voice_active or (time.time() - self.last_both_pressed < 1.0):
+            return
         time.sleep(0.05)
 
         # If button 2 is pressed, it is a voice command
         if self.btn_2.is_pressed:
             self.both_btns_pressed()
+            return
+
+        if time.time() - self.last_both_pressed < 0.5:
             return
 
         current_time = time.time()
@@ -101,11 +108,17 @@ class MenuController:
         )
 
     def handle_btn_2(self):
+
+        if self.is_voice_active or (time.time() - self.last_both_pressed < 1.0):
+            return
         time.sleep(0.05)
 
         # If button 1 is pressed, it's a combined command
         if self.btn_1.is_pressed:
             self.both_btns_pressed()
+            return
+
+        if time.time() - self.last_both_pressed < 0.5:
             return
 
         current_time = time.time()
@@ -184,6 +197,10 @@ class MenuController:
 
     def both_btns_pressed(self):
 
+        # if we are already in voice menu, we ignore new activations until it's finished to avoid conflicts and overlapping commands
+        if self.is_voice_active:
+            return
+
         if self.audio_queue.is_priority_active_or_queued(self.audio_queue.VOICE_MENU):
             print(
                 "[MenuController] Voice menu already active or queued, skipping new voice menu activation."
@@ -193,11 +210,20 @@ class MenuController:
         current_time = time.time()
 
         if current_time - self.last_both_pressed > 0.5:
+            self.is_voice_active = True
             self.last_both_pressed = current_time
+
+            # Cancel any pending single click actions to avoid conflicts with the voice menu
+            if getattr(self, "btn_1_timer", None) is not None:
+                self.btn_1_timer.cancel()
+            if getattr(self, "btn_2_timer", None) is not None:
+                self.btn_2_timer.cancel()
 
             # Loop to allow retrying if the command is not understood
             while True:
                 text_command = self.voice_interface.listen_and_recognize()
+
+                print(f"[MenuController] Recognized text: '{text_command}'")
 
                 # If timeout or nothing was recognized, just exit
                 if not text_command:
@@ -216,6 +242,9 @@ class MenuController:
                     "calibrar",
                     "huecos",
                     "aereo",
+                    "quiero ir",
+                    "cancelar ruta",
+                    "guardar ubicación",
                 ]
 
                 # Check standard commands using difflib for fuzzy matching
@@ -292,6 +321,100 @@ class MenuController:
                                 f"Detección de obstáculos aéreos {state}.",
                             )
 
+                    elif best_match == "guardar ubicación":
+                        print("[MenuController] Action detected: Guardar ubicación")
+
+                        # 1. We ask for the name
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "¿Con qué nombre quieres guardar este lugar?",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        raw_name = self.voice_interface.listen_and_recognize()
+
+                        if not raw_name:
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU,
+                                "No escuché ningún nombre. Operación cancelada.",
+                            )
+                            break
+
+                        name = raw_name.lower().strip()
+                        print(f"[MenuController] Heard name: '{name}'")
+
+                        # 2. Security confirmation to save
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            f"¿Guardar ubicación actual como {name}? Responde sí o no.",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        confirmation = self.voice_interface.listen_and_recognize()
+
+                        if confirmation and (
+                            "sí" in confirmation.lower() or "si" in confirmation.lower()
+                        ):
+                            success, message = self.navigation.save_current_location(
+                                name
+                            )
+                            self.audio_queue.put(self.audio_queue.VOICE_MENU, message)
+                        else:
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU, "Guardado cancelado."
+                            )
+                    elif best_match == "quiero ir":
+                        print(
+                            "[MenuController] Action detected: Navegación (Quiero ir)"
+                        )
+
+                        # 1. We ask for the destination
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU, "¿A dónde quieres ir?"
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        # 2. We listen only for the name of the place
+                        raw_destination = self.voice_interface.listen_and_recognize()
+
+                        if not raw_destination:
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU,
+                                "No escuché ningún destino. Operación cancelada.",
+                            )
+                            break
+
+                        destination = raw_destination.lower().strip()
+                        print(f"[MenuController] Heard destination: '{destination}'")
+
+                        # 3. Intelligent autocomplete with Difflib (NEW)
+                        # We search the list of keys (place names) of your JSON file
+                        favorite_names = list(self.navigation.favorites.keys())
+                        matches_destination = difflib.get_close_matches(
+                            destination, favorite_names, n=1, cutoff=0.5
+                        )
+
+                        if matches_destination:
+                            # It found the place, we calculate the route immediately without asking "Yes or No"
+                            corrected_destination = matches_destination[0]
+                            success, message = (
+                                self.navigation.calculate_route_to_favorite(
+                                    corrected_destination
+                                )
+                            )
+                            self.audio_queue.put(self.audio_queue.NAVIGATION, message)
+                        else:
+                            # If it doesn't look like anything on the list, we warn
+                            self.audio_queue.put(
+                                self.audio_queue.VOICE_MENU,
+                                f"No encontré {destination} en tu lista de destinos guardados.",
+                            )
+
+                    elif best_match == "cancelar ruta":
+                        print("[MenuController] Action detected: Cancelar Navegación")
+                        message = self.navigation.cancel_navigation()
+                        self.audio_queue.put(self.audio_queue.VOICE_MENU, message)
+
                     break  # Command understood, exit the loop
 
                 else:
@@ -301,3 +424,5 @@ class MenuController:
                         "No te entendí. Vuelve a intentarlo presionando los dos botones.",
                     )
                     break  # Exit after one attempt to avoid infinite loop in case of unrecognized commands
+            self.last_both_pressed = time.time()
+            self.is_voice_active = False

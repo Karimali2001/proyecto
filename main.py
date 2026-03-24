@@ -135,7 +135,7 @@ if __name__ == "__main__":
     )
 
     # Initialize navigation logic
-    navigation = Navigation()
+    navigation = Navigation(audio_queue)
 
     # Initialize menu controller
     menuController = MenuController(

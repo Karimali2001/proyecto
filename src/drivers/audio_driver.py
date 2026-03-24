@@ -126,9 +126,22 @@ class Audio:
             self.current_process.terminate()
 
     def speak_thread(self):
-        self.speak(
-            "Sistema de audio inicializado y funcionando al cien", "1.0"
-        )
+        self.speak("Sistema de audio inicializado y funcionando al cien", "1.0")
+
+    def is_busy(self):
+        """
+        is there a process currently synthesizing voice?
+        """
+        # 1.
+        if self.current_process is not None and self.current_process.poll() is None:
+            return True
+
+        # 2. Is the speaker physically playing sound at this moment?
+        if pygame.mixer.get_busy():
+            return True
+
+        # If we reach here, there is absolute silence
+        return False
 
 
 if __name__ == "__main__":

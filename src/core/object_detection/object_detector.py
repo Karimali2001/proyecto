@@ -141,47 +141,51 @@ class ObjectDetector:
                     hour -= 12
                 current_frame_objects.append(f"{translated_name} a las {hour}")
 
-                if name == "traffic light" and self.audio_queue:
-                    color = self._get_traffic_light_color(frame, track.tlbr)
-                    if color != "error":
-                        tslw = time.time() - self.global_tl_warn_time
-                        if (color != self.global_tl_color and tslw > 3.0) or (
-                            tslw > 180.0
-                        ):
-                            msg = (
-                                f"Precaución, semáforo a las {hour} está apagado o dañado"
-                                if color == "apagado"
-                                else f"Semáforo a las {hour} en {color}"
-                            )
-                            self.audio_queue.put(
-                                AudioPriorityQueue.DANGEROUS_OBJECTS, msg
-                            )
-                            self.global_tl_color, self.global_tl_warn_time = (
-                                color,
-                                time.time(),
-                            )
+                # if name == "traffic light" and self.audio_queue:
+                #     color = self._get_traffic_light_color(frame, track.tlbr)
+                #     if color != "error":
+                #         tslw = time.time() - self.global_tl_warn_time
+                #         if (color != self.global_tl_color and tslw > 3.0) or (
+                #             tslw > 180.0
+                #         ):
+                #             msg = (
+                #                 f"Precaución, semáforo a las {hour} está apagado o dañado"
+                #                 if color == "apagado"
+                #                 else f"Semáforo a las {hour} en {color}"
+                #             )
+                #             self.audio_queue.put(
+                #                 AudioPriorityQueue.DANGEROUS_OBJECTS, msg
+                #             )
+                #             self.global_tl_color, self.global_tl_warn_time = (
+                #                 color,
+                #                 time.time(),
+                #             )
 
-                if name in ["car", "bus", "motorcycle", "truck"] and self.audio_queue:
-                    y_c, x_c = (
-                        (track.tlbr[1] + track.tlbr[3]) / 2,
-                        (track.tlbr[0] + track.tlbr[2]) / 2,
-                    )
-                    if track.track_id not in self.vehicle_history:
-                        self.vehicle_history[track.track_id] = collections.deque(
-                            maxlen=10
-                        )
-                    self.vehicle_history[track.track_id].append((x_c, y_c))
-                    if len(self.vehicle_history[track.track_id]) >= 5:
-                        old_x, old_y = self.vehicle_history[track.track_id][0]
-                        if np.sqrt((x_c - old_x) ** 2 + (y_c - old_y) ** 2) > 40 and (
-                            time.time() - self.vehicle_cooldown.get(track.track_id, 0)
-                            > 5.0
-                        ):
-                            self.audio_queue.put(
-                                AudioPriorityQueue.DANGEROUS_OBJECTS,
-                                f"Precaución, {translated_name} en movimiento a las {hour}",
-                            )
-                            self.vehicle_cooldown[track.track_id] = time.time()
+                # if (
+                #     False
+                #     and name in ["car", "bus", "motorcycle", "truck"]
+                #     and self.audio_queue
+                # ):
+                #     y_c, x_c = (
+                #         (track.tlbr[1] + track.tlbr[3]) / 2,
+                #         (track.tlbr[0] + track.tlbr[2]) / 2,
+                #     )
+                #     if track.track_id not in self.vehicle_history:
+                #         self.vehicle_history[track.track_id] = collections.deque(
+                #             maxlen=10
+                #         )
+                #     self.vehicle_history[track.track_id].append((x_c, y_c))
+                #     if len(self.vehicle_history[track.track_id]) >= 5:
+                #         old_x, old_y = self.vehicle_history[track.track_id][0]
+                #         if np.sqrt((x_c - old_x) ** 2 + (y_c - old_y) ** 2) > 40 and (
+                #             time.time() - self.vehicle_cooldown.get(track.track_id, 0)
+                #             > 5.0
+                #         ):
+                #             self.audio_queue.put(
+                #                 AudioPriorityQueue.DANGEROUS_OBJECTS,
+                #                 f"Precaución, {translated_name} en movimiento a las {hour}",
+                #             )
+                #             self.vehicle_cooldown[track.track_id] = time.time()
 
             # ==========================================
             # FINDER STATE MACHINE

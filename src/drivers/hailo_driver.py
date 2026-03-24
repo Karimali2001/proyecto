@@ -1,11 +1,11 @@
 import numpy as np
 import queue
 
-# Necesario para importar HailoInfer
+# Necessary to import HailoInfer
 import os
 import sys
 
-# Ajusta esta ruta según dónde esté tu archivo HailoDriver con respecto a common/
+# Adjust this path depending on where your HailoDriver file is located with respect to common/
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from common.hailo_inference import HailoInfer
 
@@ -18,7 +18,7 @@ class HailoDriver:
         self.device = None
         self.class_names = []
 
-        # Estas variables guardarán las dimensiones que el modelo necesita
+        # These variables will save the dimensions that the model needs
         self.model_height = 0
         self.model_width = 0
 
@@ -35,16 +35,16 @@ class HailoDriver:
     def start(self):
         """Initializes the Hailo device context using HailoInfer."""
         try:
-            print(f"[HailoDriver] Iniciando chip Hailo con modelo: {self.model_path}")
-            # Inicializamos con batch_size = 1 porque procesaremos frame por frame
+            print(f"[HailoDriver] Starting Hailo chip with model: {self.model_path}")
+            # We initialize with batch_size = 1 because we will process frame by frame
             self.device = HailoInfer(self.model_path, batch_size=1)
 
-            # Guardamos la forma que requiere el modelo (ej. 640x640x3)
+            # We save the shape that the model requires (e.g. 640x640x3)
             self.model_height, self.model_width, _ = self.device.get_input_shape()
-            print("[HailoDriver] Hailo-8L inicializado exitosamente.")
+            print("[HailoDriver] Hailo-8L successfully initialized.")
 
         except Exception as e:
-            print(f"[HailoDriver] Error al iniciar HailoInfer: {e}")
+            print(f"[HailoDriver] Error starting HailoInfer: {e}")
             self.device = None
 
         return self
@@ -57,53 +57,53 @@ class HailoDriver:
 
     def infer(self, frame):
         """
-        Ejecuta la inferencia sobre el frame.
-        El frame debe venir ya con el pre-procesamiento básico
-        (resize a self.model_width x self.model_height y en formato RGB).
+        Executes inference on the frame.
+        The frame must come with basic pre-processing already done
+        (resize to self.model_width x self.model_height and in RGB format).
         """
         if not self.device:
             return None
 
-        # HailoInfer espera un "batch" (lista de imágenes)
+        # HailoInfer expects a "batch" (list of images)
         preprocessed_batch = [frame]
 
-        # Usamos una Queue para esperar la respuesta asíncrona y hacerla síncrona
-        buzon_respuesta = queue.Queue()
+        # We use a Queue to wait for the asynchronous response and make it synchronous
+        response_queue = queue.Queue()
 
-        def mi_callback(completion_info, bindings_list):
+        def my_callback(completion_info, bindings_list):
             if completion_info.exception:
-                buzon_respuesta.put(("error", completion_info.exception))
+                response_queue.put(("error", completion_info.exception))
             else:
-                buzon_respuesta.put(("exito", bindings_list))
+                response_queue.put(("success", bindings_list))
 
         try:
-            self.device.run(preprocessed_batch, mi_callback)
+            self.device.run(preprocessed_batch, my_callback)
         except Exception as e:
-            print(f"[HailoDriver] Error al enviar frame a Hailo: {e}")
+            print(f"[HailoDriver] Error sending frame to Hailo: {e}")
             return None
 
-        # Esperamos a que Hailo termine y ponga el resultado en la cola
-        estado, resultado_hailo = buzon_respuesta.get()
+        # We wait for Hailo to finish and put the result in the queue
+        status, hailo_result = response_queue.get()
 
-        if estado == "error":
-            print(f"[HailoDriver] Error interno de inferencia: {resultado_hailo}")
+        if status == "error":
+            print(f"[HailoDriver] Internal inference error: {hailo_result}")
             return None
 
-        bindings = resultado_hailo[0]
+        bindings = hailo_result[0]
 
-        # Dependiendo del modelo, puede devolver 1 buffer o múltiples (como los YOLO)
+        # Depending on the model, it may return 1 buffer or multiple (like YOLO models)
         if len(bindings._output_names) == 1:
             raw_result = bindings.output().get_buffer()
-            # Encapsulamos en una lista para emular la estructura esperada por extract_detections
+            # We encapsulate in a list to emulate the structure expected by extract_detections
             return [raw_result]
         else:
-            # Si el modelo bota múltiples salidas, las agrupamos en un diccionario
+            # If the model gives multiple outputs, we group them in a dictionary
             raw_result = {
                 name: np.expand_dims(bindings.output(name).get_buffer(), axis=0)
                 for name in bindings._output_names
             }
-            # OJO: Dependiendo del modelo de detección que uses (YOLOv8, YOLOv5),
-            # el cómo se parsean estos diccionarios cambia drásticamente.
+            # WARNING: Depending on the detection model you use (YOLOv8, YOLOv5),
+            # how these dictionaries are parsed changes drastically.
             return raw_result
 
     def extract_detections(self, hailo_output, video_w, video_h):
@@ -112,11 +112,11 @@ class HailoDriver:
             return results
 
         try:
-            # hailo_output[0] es la lista de 80 clases
+            # hailo_output[0] is the list of 80 classes
             detections_by_class = hailo_output[0]
 
             for class_id, class_detections in enumerate(detections_by_class):
-                # Si no hay detecciones para esta clase, el array está vacío (shape 0,5)
+                # If there are no detections for this class, the array is empty (shape 0,5)
                 if len(class_detections) == 0:
                     continue
 
@@ -124,7 +124,7 @@ class HailoDriver:
                     score = detection[4]
 
                     if score >= self.threshold:
-                        # Hailo NMS exporta por defecto: ymin, xmin, ymax, xmax
+                        # Hailo NMS exports by default: ymin, xmin, ymax, xmax
                         y0, x0, y1, x1 = (
                             detection[0],
                             detection[1],
@@ -147,30 +147,30 @@ class HailoDriver:
                         results.append((name, bbox, score))
 
         except Exception as e:
-            print(f"[HailoDriver] Error parseando salida de Hailo: {e}")
+            print(f"[HailoDriver] Error parsing Hailo output: {e}")
 
         return results
 
     def extract_depth_map(self, hailo_output):
         """
-        Extrae y da formato a la salida del modelo scdepthv3.
-        Retorna la matriz de profundidad 2D (256x320) lista para analizar.
+        Extracts and formats the output of the scdepthv3 model.
+        Returns the 2D depth matrix (256x320) ready for analysis.
         """
         if not hailo_output or len(hailo_output) == 0:
             return None
 
         try:
-            # En scdepthv3, la salida suele ser un solo array plano.
+            # In scdepthv3, the output is usually a single flat array.
             raw_depth = hailo_output[0]
 
-            # El modelo scdepthv3 de Hailo produce una matriz de 256x320
-            # Redimensionamos el array plano a la forma 2D correcta.
+            # The Hailo scdepthv3 model produces a 256x320 matrix
+            # We resize the flat array to the correct 2D shape.
             depth_array = np.array(raw_depth).reshape((256, 320))
 
             return depth_array
 
         except Exception as e:
-            print(f"[HailoDriver] Error procesando mapa de profundidad: {e}")
+            print(f"[HailoDriver] Error processing depth map: {e}")
             return None
 
     def stop(self):
