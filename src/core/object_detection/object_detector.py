@@ -70,20 +70,30 @@ class ObjectDetector:
     def setRawDetections(self, detections):
         self.raw_detections = detections
 
-    def _get_traffic_light_color(self, frame, box):
+    def _get_traffic_light_color(self, frame, box, track_id=0, score=0.0):
         x1, y1, x2, y2 = map(int, box)
         x1, y1 = max(0, x1), max(0, y1)
         x2, y2 = min(frame.shape[1], x2), min(frame.shape[0], y2)
         crop = frame[y1:y2, x1:x2]
+
         if crop.size == 0:
             return "error"
 
+        h, w, _ = crop.shape
+        area = h * w
+
         hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
-        mask_red1 = cv2.inRange(hsv, np.array([0, 70, 50]), np.array([10, 255, 255]))
-        mask_red2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
+
+        # Red 1: 0-10, Red 2: 170-180, Yellow: 15-35, Green: 40-90 (con S y V altos para evitar sombras)
+        mask_red1 = cv2.inRange(hsv, np.array([0, 70, 150]), np.array([10, 255, 255]))
+        mask_red2 = cv2.inRange(
+            hsv, np.array([170, 70, 150]), np.array([180, 255, 255])
+        )
         mask_red = cv2.bitwise_or(mask_red1, mask_red2)
-        mask_yellow = cv2.inRange(hsv, np.array([15, 50, 50]), np.array([35, 255, 255]))
-        mask_green = cv2.inRange(hsv, np.array([40, 50, 50]), np.array([90, 255, 255]))
+        mask_yellow = cv2.inRange(
+            hsv, np.array([15, 50, 150]), np.array([35, 255, 255])
+        )
+        mask_green = cv2.inRange(hsv, np.array([40, 50, 150]), np.array([90, 255, 255]))
 
         colors = {
             "rojo": cv2.countNonZero(mask_red),
@@ -91,7 +101,28 @@ class ObjectDetector:
             "verde": cv2.countNonZero(mask_green),
         }
         dominant = max(colors, key=colors.get)  # type: ignore
-        if colors[dominant] > 20:
+
+        # ==========================================
+        # Save image for debug
+        # ==========================================
+        debug_dir = Path.cwd() / "debug_semaforos"
+        debug_dir.mkdir(exist_ok=True)
+        timestamp = int(time.time() * 1000)
+
+        # The name includes track_id, confidence score, dominant color, and pixel count for that color
+        filename = (
+            debug_dir
+            / f"tl_{timestamp}_id{track_id}_conf{score:.2f}_{dominant}_px{colors[dominant]}.jpg"
+        )
+        cv2.imwrite(str(filename), crop)
+
+        # ==========================================
+        # Proportional threshold: at least 50 pixels AND 5% of the box area must match the dominant color
+        # ==========================================
+        # This prevents false positives in small boxes (where 10 pixels might be enough) and ensures larger boxes have a more significant color presence.
+        min_pixels = max(50, area * 0.05)
+
+        if colors[dominant] > min_pixels:
             return dominant
         return "apagado"
 
@@ -132,7 +163,7 @@ class ObjectDetector:
                 if not best_det:
                     continue
 
-                name, _, _ = best_det
+                name, bbox, score = best_det
                 translated_name = translations.get(name, name)
                 hour = round(
                     9 + (((track.tlbr[0] + track.tlbr[2]) / 2) / self.video_w * 6)
@@ -141,25 +172,30 @@ class ObjectDetector:
                     hour -= 12
                 current_frame_objects.append(f"{translated_name} a las {hour}")
 
-                # if name == "traffic light" and self.audio_queue:
-                #     color = self._get_traffic_light_color(frame, track.tlbr)
-                #     if color != "error":
-                #         tslw = time.time() - self.global_tl_warn_time
-                #         if (color != self.global_tl_color and tslw > 3.0) or (
-                #             tslw > 180.0
-                #         ):
-                #             msg = (
-                #                 f"Precaución, semáforo a las {hour} está apagado o dañado"
-                #                 if color == "apagado"
-                #                 else f"Semáforo a las {hour} en {color}"
-                #             )
-                #             self.audio_queue.put(
-                #                 AudioPriorityQueue.SEMAPHORE, msg
-                #             )
-                #             self.global_tl_color, self.global_tl_warn_time = (
-                #                 color,
-                #                 time.time(),
-                #             )
+                if name == "traffic light" and score > 0.70 and self.audio_queue:
+                    # Pasamos el track_id y el score para que salgan en el nombre de la foto
+                    color = self._get_traffic_light_color(
+                        frame, track.tlbr, track.track_id, score
+                    )
+
+                    if color != "error":
+                        tslw = time.time() - self.global_tl_warn_time
+                        if (color != self.global_tl_color and tslw > 3.0) or (
+                            tslw > 180.0
+                        ):
+                            msg = (
+                                f"Precaución, semáforo a las {hour} está apagado"
+                                if color == "apagado"
+                                else f"Semáforo a las {hour} en {color}"
+                            )
+                            # Usamos la voz rápida en segundo plano para no interrumpir
+                            self.audio_queue.play_concurrent(
+                                {"action": "fast_voice", "text": msg}
+                            )
+                            self.global_tl_color, self.global_tl_warn_time = (
+                                color,
+                                time.time(),
+                            )
 
                 if name in ["car", "bus", "motorcycle", "truck"] and self.audio_queue:
                     # 1. Calculamos el ÁREA del vehículo, no su centro
@@ -171,18 +207,6 @@ class ObjectDetector:
                         self.vehicle_history[track.track_id] = collections.deque(
                             maxlen=10
                         )
-
-                        # ANTI-SPAM: Solo te avisa de carros estacionados UNA VEZ
-                        # y SOLO si están en tu camino directo (a las 11, 12 o 1)
-                        if hour in [11, 12, 1]:
-                            self.audio_queue.play_concurrent(
-                                {
-                                    "action": "fast_voice",
-                                    "text": f"{translated_name} a las {hour}",
-                                }
-                            )
-                        # Registramos el tiempo para no repetir
-                        self.vehicle_cooldown[track.track_id] = time.time()
 
                     # Guardamos el área en el historial
                     self.vehicle_history[track.track_id].append(area)
@@ -203,7 +227,7 @@ class ObjectDetector:
                                 self.audio_queue.play_concurrent(
                                     {
                                         "action": "fast_voice",
-                                        "text": f"¡Cuidado! {translated_name} acercándose",
+                                        "text": f"Carro {translated_name}",
                                     }
                                 )
                                 self.vehicle_cooldown[track.track_id] = time.time()

@@ -64,3 +64,6 @@ Thumbs.db
 assets/*.hef
 assets/*.wav
 config/local_*.yaml
+
+/debug_radar
+/SEMAPHOREaforos

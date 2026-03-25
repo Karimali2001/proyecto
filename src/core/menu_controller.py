@@ -261,7 +261,7 @@ class MenuController:
                             "Este es el menú de ayuda. Puedes decir los siguientes comandos. "
                             "Número uno. Di Menú. para listar qué puedo hacer por ti. "
                             "Número dos. Di Dónde estoy. para conocer tu posición actual en el mapa. "
-                            "Número tres. Di Calibrar. para ajustar el sensor a tu postura y altura actual. "
+                            "Número tres. Di Calibrar. para ajustar la brújula"
                             "Número cuatro. Di Huecos. para activar o desactivar la detección de huecos en el piso. "
                             "Número cinco. Di Aéreo. para activar o desactivar la detección de obstáculos aéreo. "
                             "Para continuar. vuelve a presionar los botones y di un comando."
@@ -278,28 +278,35 @@ class MenuController:
                             self.audio_queue.NAVIGATION, location_message
                         )
                     elif best_match == "calibrar":
-                        print("[MenuController] Action detected: Calibrate")
+                        print("[MenuController] Action detected: Calibrate Compass")
 
-                        # 1. Warn user to stay still
+                        # 1. Avisamos al usuario y le damos instrucciones
                         self.audio_queue.put(
                             self.audio_queue.VOICE_MENU,
-                            "Calibrando. Por favor quédate quieto mirando al frente en un espacio despejado.",
+                            "Calibrando brújula. Por favor, da vueltas sobre tu propio eje lentamente hasta que te avise que terminó la calibración.",
                         )
 
-                        # If hole_detector has a calibrate function or activates here, we call it
-                        if self.hole_detector:
-                            self.hole_detector.is_active = True
+                        # Esperamos a que la voz termine de hablar para empezar a medir
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        # 2. Iniciamos la recolección de datos en el IMU
+                        if hasattr(self.navigation, "imu"):
+                            self.navigation.imu.start_calibration()
+
+                            # 3. Creamos un temporizador que detendrá la calibración en 15 segundos
+                            # Esto se ejecuta en un hilo separado (no bloquea el programa)
+                            def finish_imu_cal():
+                                self.navigation.imu.finish_calibration()
+                                self.audio_queue.put(
+                                    self.audio_queue.VOICE_MENU,
+                                    "Calibración de brújula exitosa",
+                                )
+
+                            threading.Timer(15.0, finish_imu_cal).start()
+                        else:
                             print(
-                                "[MenuController] Hole detector activated by calibration."
+                                "[MenuController] Error: IMU no está conectado a Navigation"
                             )
-
-                        self.hole_detector.recalibrate_sensor()
-
-                        # 2. Inform it has finished
-                        self.audio_queue.put(
-                            self.audio_queue.VOICE_MENU,
-                            "Calibración completada con éxito. Listo para caminar.",
-                        )
 
                     elif best_match == "huecos":
                         print("[MenuController] Action detected: Holes")

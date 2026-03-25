@@ -54,7 +54,9 @@ def audio_consumer_thread():
         audio_queue.task_done()
 
 
-def frame_producer_thread(camera_driver, object_detector, aerial_obstacle_detector):
+def frame_producer_thread(
+    camera_driver, object_detector, aerial_obstacle_detector, navigation
+):
 
     while True:
         try:
@@ -67,7 +69,9 @@ def frame_producer_thread(camera_driver, object_detector, aerial_obstacle_detect
                 raw_detections = object_detector.getRawDetections()
 
                 # --- B: DEPTH DETECTION ---
-                aerial_obstacle_detector.process_frame(frame, raw_detections)
+                aerial_obstacle_detector.process_frame(
+                    frame, raw_detections, current_heading=navigation.compass
+                )
 
         except Exception as e:
             print(f"[Vision Thread] Error: {e}")
@@ -150,16 +154,23 @@ if __name__ == "__main__":
     t_audio = Thread(target=audio_consumer_thread, daemon=True)
     t_camera = Thread(
         target=frame_producer_thread,
-        args=(global_shutter_camera, object_detector, aerial_obstacle_detector),
+        args=(
+            global_shutter_camera,
+            object_detector,
+            aerial_obstacle_detector,
+            navigation,
+        ),
         daemon=True,
     )
     t_tof = Thread(target=hole_detector.detect_hole_thread, daemon=True)
     t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
+    t_imu = Thread(target=navigation.thread_update_imu, daemon=True)
 
     t_audio.start()
     t_camera.start()
     t_tof.start()
     t_navigation.start()
+    t_imu.start()
 
     try:
         while True:

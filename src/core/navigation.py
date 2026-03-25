@@ -43,9 +43,10 @@ class Navigation:
         self.favorites = {}  # name -> (lat, lon)
         self._load_favorites()
 
-    def _thread_update_imu(self):
-        """Keeps the physical compass (IMU) updated"""
-        while self.is_imu_active:
+    def thread_update_imu(self):
+        """Updates the IMU compass heading in real time"""
+        print("[Navigation] IMU thread started. Listening in real time...")
+        while True:
             if hasattr(self, "imu"):
                 self.compass = self.imu.get_heading()
             time.sleep(0.05)
