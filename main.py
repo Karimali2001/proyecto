@@ -1,4 +1,5 @@
 import time
+import cv2
 
 from threading import Thread
 from pathlib import Path
@@ -54,9 +55,17 @@ def audio_consumer_thread():
         audio_queue.task_done()
 
 
+# Añade 'depth_driver' a los argumentos del hilo
 def frame_producer_thread(
-    camera_driver, object_detector, aerial_obstacle_detector, navigation
+    camera_driver,
+    object_detector,
+    aerial_obstacle_detector,
+    hole_detector,
+    depth_driver,
+    navigation,
 ):
+
+    depth_h, depth_w, _ = depth_driver.get_input_shape()
 
     while True:
         try:
@@ -65,13 +74,25 @@ def frame_producer_thread(
             if frame is not None:
                 # --- A: OBJECT DETECTION ---
                 object_detector.process_frame(frame)
-
                 raw_detections = object_detector.getRawDetections()
 
-                # --- B: DEPTH DETECTION ---
-                aerial_obstacle_detector.process_frame(
-                    frame, raw_detections, current_heading=navigation.compass
-                )
+                # --- B: Depth Inference ---
+                frame_resized = cv2.resize(frame, (depth_w, depth_h))
+                raw_output = depth_driver.infer(frame_resized)
+                depth_array = depth_driver.extract_depth_map(raw_output)
+
+                if depth_array is not None:
+                    # --- C: Distribute depth matrix ---
+                    aerial_obstacle_detector.process_frame(
+                        frame_resized,
+                        depth_array,
+                        raw_detections,
+                        current_heading=navigation.compass,
+                    )
+
+                    hole_detector.process_frame(
+                        frame_resized, depth_array, current_heading=navigation.compass
+                    )
 
         except Exception as e:
             print(f"[Vision Thread] Error: {e}")
@@ -103,14 +124,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"[Main]: Error initializing camera and model: {e}")
 
-    # Initialize object detector
-    object_detector = ObjectDetector(
-        global_shutter_camera, object_detection_driver, audio_queue
-    )
-
-    # Initialize obstacle detector
-    hole_detector = HoleDetector(audio_queue, ignore_tof=True)
-
     # Initialize OCR driver
     try:
         ocr_driver = OCR(
@@ -138,6 +151,19 @@ if __name__ == "__main__":
         camera_height_mm=1100,
     )
 
+    # Initialize object detector
+    object_detector = ObjectDetector(
+        global_shutter_camera, object_detection_driver, audio_queue
+    )
+
+    # Initialize obstacle detector
+    hole_detector = HoleDetector(
+        hailo_driver=depth_driver,
+        audio_queue=audio_queue,
+        user_height_mm=1780,
+        camera_height_mm=1220,
+    )
+
     # Initialize navigation logic
     navigation = Navigation(audio_queue)
 
@@ -162,13 +188,12 @@ if __name__ == "__main__":
         ),
         daemon=True,
     )
-    t_tof = Thread(target=hole_detector.detect_hole_thread, daemon=True)
+
     t_navigation = Thread(target=navigation.thread_update_location, daemon=True)
     t_imu = Thread(target=navigation.thread_update_imu, daemon=True)
 
     t_audio.start()
     t_camera.start()
-    t_tof.start()
     t_navigation.start()
     t_imu.start()
 

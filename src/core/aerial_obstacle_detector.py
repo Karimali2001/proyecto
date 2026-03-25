@@ -95,43 +95,37 @@ class AerialObstacleDetector:
                 return True
         return False
 
-    def process_frame(self, frame, yolo_detections=[], current_heading=None):
+    def process_frame(
+        self, frame_resized, depth_array, yolo_detections=[], current_heading=None
+    ):
         """
         NEW: Receives 'current_heading' from IMU to detect if the user turned.
         """
-        if not self.is_active:
+        if not self.is_active or depth_array is None:
             return False, 0.0
 
         self.frame_counter += 1
         if self.frame_counter % 3 != 0:
             return False, 0.0
 
-        # 1. Infer Depth
-        frame_resized = cv2.resize(frame, (self.model_w, self.model_h))
-        raw_output = self.hailo_driver.infer(frame_resized)
-        depth_array = self.hailo_driver.extract_depth_map(raw_output)
-
-        if depth_array is None:
-            return False, 0.0
-
-        # 2. Extract tunnel
+        # 1. Extract tunnel
         high_tunnel = depth_array[
             self.rect_y : self.rect_y + self.rect_height,
             self.rect_x : self.rect_x + self.rect_width,
         ]
 
-        # 3. Calculate Blockage (Adjusted to 25% to avoid ghosts)
+        # 2. Calculate Blockage (Adjusted to 25% to avoid ghosts)
         high_blockage = (
             np.sum(high_tunnel > self.proximity_threshold) / high_tunnel.size
         ) * 100
         has_danger = high_blockage > 25.0
 
-        # 4. SMART FILTER (YOLO)
+        # 3. SMART FILTER (YOLO)
         if has_danger and self.check_yolo_overlap(yolo_detections):
             has_danger = False
 
         # ==========================================
-        # 5. TURN DETECTION (Immediate Reset)
+        # 4. TURN DETECTION (Immediate Reset)
         # ==========================================
         # If we were muted looking at a wall, and IMU tells us you turned...
         if (
@@ -150,7 +144,7 @@ class AerialObstacleDetector:
                 self.clear_streak = 0
 
         # ==========================================
-        # 6. STATE MACHINE
+        # 5. STATE MACHINE
         # ==========================================
         if has_danger:
             self.danger_streak += 1
@@ -166,7 +160,7 @@ class AerialObstacleDetector:
         confirmed_danger = self.danger_streak >= 3
 
         # ==========================================
-        # 7. TRIGGER ALARM AND PHOTO
+        # 6. TRIGGER ALARM AND PHOTO
         # ==========================================
         current_time = time.time()
 
