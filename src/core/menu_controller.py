@@ -215,9 +215,9 @@ class MenuController:
 
             # Cancel any pending single click actions to avoid conflicts with the voice menu
             if getattr(self, "btn_1_timer", None) is not None:
-                self.btn_1_timer.cancel()
+                self.btn_1_timer.cancel()  # type: ignore
             if getattr(self, "btn_2_timer", None) is not None:
-                self.btn_2_timer.cancel()
+                self.btn_2_timer.cancel()  # type: ignore
 
             # Loop to allow retrying if the command is not understood
             while True:
@@ -245,6 +245,8 @@ class MenuController:
                     "quiero ir",
                     "cancelar ruta",
                     "guardar ubicación",
+                    "botones",
+                    "sonidos",
                 ]
 
                 # Check standard commands using difflib for fuzzy matching
@@ -264,6 +266,9 @@ class MenuController:
                             "Número tres. Di Calibrar. para ajustar la brújula"
                             "Número cuatro. Di Huecos. para activar o desactivar la detección de huecos en el piso. "
                             "Número cinco. Di Aéreo. para activar o desactivar la detección de obstáculos aéreo. "
+                            "Número seis. Di Botones. para aprender para qué sirve cada botón. "
+                            "Número siete. Di Sonidos. para escuchar una demostración de las alarmas. "
+                            "Para continuar. vuelve a presionar los botones y di un comando."
                             "Para continuar. vuelve a presionar los botones y di un comando."
                         )
 
@@ -421,6 +426,177 @@ class MenuController:
                         print("[MenuController] Action detected: Cancelar Navegación")
                         message = self.navigation.cancel_navigation()
                         self.audio_queue.put(self.audio_queue.VOICE_MENU, message)
+
+                    elif best_match == "botones":
+                        print(
+                            "[MenuController] Action detected: Explicación de Botones"
+                        )
+                        explicacion_botones = (
+                            "Este sistema se controla con dos botones principales. "
+                            "Presionar el botón izquierdo una vez te dirá los obstáculos que tienes enfrente y la dirección con respecto a las agujas del reloj. "
+                            "Presionarlo dos veces activará el buscador de asientos libres. "
+                            "Presionar el botón derecho una vez leerá los textos o letreros que tengas frente a ti. "
+                            "Presionarlo dos veces activará el modo de lectura continua, ideal para leer letreros mientras caminas. "
+                            "Por último, mantener presionados ambos botones al mismo tiempo activará este menú de voz. "
+                        )
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU, explicacion_botones
+                        )
+
+                    # === NUEVA SECCIÓN: DEMOSTRACIÓN DE SONIDOS ===
+                    elif best_match == "sonidos":
+                        print(
+                            "[MenuController] Action detected: Demostración de Sonidos"
+                        )
+
+                        # Explicación Inicial
+                        intro_sonidos = (
+                            "A continuación escucharás una demostración de los sonidos del sistema. "
+                            "Presta atención al tono y de qué lado provienen."
+                        )
+                        self.audio_queue.put(self.audio_queue.VOICE_MENU, intro_sonidos)
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        # Demo: Huecos
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "El siguiente sonido indica un hueco o escalón hacia abajo en el suelo.",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "center",
+                                "sound_type": "hole",
+                            },
+                        )
+                        time.sleep(1.5)  # Pausa dramática para escuchar el sonido
+
+                        # Demo: Aéreo
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Este sonido te avisa de un obstáculo aéreo a la altura de tu cabeza o pecho.",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "center",
+                                "sound_type": "aerial",
+                            },
+                        )
+                        time.sleep(1.5)
+
+                        # Demo: Buscador de Asientos / Sonares
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Cuando actives el buscador de asientos. "
+                            "Si escuchas el pitido solo por tu audífono izquierdo, significa que la silla está a tu izquierda.",
+                        )
+
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+                        # Sonar Izquierdo
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "left",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "left",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "left",
+                                "sound_type": "sonar",
+                            },
+                        )
+
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Si el pitido suena solo por la derecha, la silla está a tu derecha.",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        # Sonar Derecho
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "right",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "right",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "right",
+                                "sound_type": "sonar",
+                            },
+                        )
+
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Y si el pitido suena en el centro, en ambos oídos al mismo tiempo, significa que vas por buen camino y la silla está justo frente a ti. "
+                            "El pitido se hará más rápido a medida que te acerques.",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        # Sonar Centro (Simulando acercamiento con dos pitidos rápidos)
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "center",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        time.sleep(0.5)
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            {
+                                "action": "sound",
+                                "position": "center",
+                                "sound_type": "sonar",
+                            },
+                        )
+                        time.sleep(1.5)
+
+                        # Demo: Vehículos
+                        self.audio_queue.put(
+                            self.audio_queue.VOICE_MENU,
+                            "Finalmente, si te acercas a un vehículo, te avisaré rapidamente de la siguiente manera:",
+                        )
+                        self.audio_queue.wait_for_priority(self.audio_queue.VOICE_MENU)
+
+                        self.audio_queue.play_concurrent(
+                            {
+                                "action": "fast_voice",
+                                "text": "Carro",
+                            }
+                        )
 
                     break  # Command understood, exit the loop
 

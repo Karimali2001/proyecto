@@ -227,7 +227,7 @@ class ObjectDetector:
                                 self.audio_queue.play_concurrent(
                                     {
                                         "action": "fast_voice",
-                                        "text": f"Carro {translated_name}",
+                                        "text": f"{translated_name}",
                                     }
                                 )
                                 self.vehicle_cooldown[track.track_id] = time.time()

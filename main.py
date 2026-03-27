@@ -184,6 +184,8 @@ if __name__ == "__main__":
             global_shutter_camera,
             object_detector,
             aerial_obstacle_detector,
+            hole_detector,
+            depth_driver,
             navigation,
         ),
         daemon=True,
