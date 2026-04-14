@@ -57,12 +57,28 @@ class ObjectDetector:
     def getLastDetection(self):
         if len(self.detection_history) == 0:
             return []
+
         counter = collections.Counter()
         for frame_objects in self.detection_history:
             for obj in frame_objects:
                 counter[obj] += 1
+
         threshold = 3 if len(self.detection_history) == 5 else 1
-        return [obj for obj, count in counter.items() if count >= threshold]
+        latest_ordered_frame = next(
+            (
+                frame_objects
+                for frame_objects in reversed(self.detection_history)
+                if frame_objects
+            ),
+            [],
+        )
+        ordered_detections = []
+
+        for obj in latest_ordered_frame:
+            if counter[obj] >= threshold and obj not in ordered_detections:
+                ordered_detections.append(obj)
+
+        return ordered_detections
 
     def getRawDetections(self):
         return self.raw_detections
@@ -152,6 +168,9 @@ class ObjectDetector:
                 [[d[1][0], d[1][1], d[1][2], d[1][3], d[2]] for d in detections]
             )
             online_targets = self.tracker.update(dets_for_tracker)
+            online_targets = sorted(
+                online_targets, key=lambda track: (track.tlbr[0] + track.tlbr[2]) / 2
+            )
             current_frame_objects = []
 
             for track in online_targets:

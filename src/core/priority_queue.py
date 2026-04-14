@@ -6,22 +6,22 @@ import time
 class AudioPriorityQueue:
     HOLE_DETECTION = 1
     SEMAPHORE = 2
-    # AIR_OBSTACLE 
+    # AIR_OBSTACLE
     VOICE_MENU = 3
     OBJECT_DETECTION = 4
     TEXT_RECOGNITION = 4
     NAVIGATION = 5
 
-    def __init__(self, audio_driver):
+    def __init__(self, audio_interface):
         """
-        Initializes the priority queue with an audio driver.
+        Initializes the priority queue with an audio interface.
 
         Args:
-            audio_driver: The audio driver instance to be used for processing audio tasks.
+            audio_interface: The UI audio interface used to process audio tasks.
 
         Attributes:
             pq (queue.PriorityQueue): The internal priority queue for managing tasks.
-            audio_driver: Stores the provided audio driver instance.
+            audio_interface: Stores the provided audio interface instance.
             current_priority (float): Tracks the priority of the currently processed task.
                 Initialized to float('inf') to indicate that no task is currently being processed,
                 and any incoming task will have a lower (higher priority) value.
@@ -29,40 +29,36 @@ class AudioPriorityQueue:
             counter (int): Used to preserve FIFO order for tasks with the same priority.
         """
         self.pq = queue.PriorityQueue()
-        self.audio_driver = audio_driver
+        self.audio_interface = audio_interface
         self.current_priority = float("inf")
         self.lock = Lock()
         self.counter = 0  # To preserve FIFO for same priority
 
     def play_concurrent(self, message):
         """
-        Dispara sonidos o voces rápidas inmediatamente en el Canal 1.
-        Si el diccionario está incompleto, aborta en silencio.
+        Plays sounds or short voice messages immediately without queuing.
         """
         if isinstance(message, dict):
             action = message.get("action")
-            
+
             if action == "sound":
                 sound_type = message.get("sound_type")
                 position = message.get("position")
-                
-                # Si falta el tipo de sonido o la posición, no hacemos nada
+
                 if not sound_type or not position:
                     return
-                    
-                self.audio_driver.play_spatial_sound(
-                    position=position,
-                    sound_type=sound_type
+
+                self.audio_interface.play_spatial_sound(
+                    position=position, sound_type=sound_type
                 )
-                
+
             elif action == "fast_voice":
                 text = message.get("text")
-                
-                # Si falta el texto, no hablamos nada
+
                 if not text:
                     return
-                    
-                self.audio_driver.speak_fast_background(text)
+
+                self.audio_interface.speak_fast_background(text)
 
     def put(self, priority, message):
         """
@@ -74,7 +70,7 @@ class AudioPriorityQueue:
                 print(
                     f"[PriorityQueue] Preempting current audio for higher priority: {priority}"
                 )
-                self.audio_driver.stop()
+                self.audio_interface.stop()
 
             self.pq.put((priority, self.counter, message))
             self.counter += 1

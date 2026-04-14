@@ -15,6 +15,7 @@ from src.drivers.camera_driver import CameraDriver
 from src.drivers.hailo_driver import HailoDriver
 from src.core.navigation import Navigation
 from src.core.aerial_obstacle_detector import AerialObstacleDetector
+from src.ui.audio_interface import AudioInterface
 
 
 base_path = Path.cwd()
@@ -30,29 +31,9 @@ depth_model_path = str(base_path / "assets" / "scdepthv3.hef")
 video_w, video_h = 1280, 960
 
 
-audio = Audio()
-audio_queue = AudioPriorityQueue(audio)
-
-
-def audio_consumer_thread():
-    """This is the only thread allowed to speak"""
-    while True:
-        priority, message = audio_queue.get()
-
-        # 1. if the message is a dict with "action": "sound", we play the corresponding sound effect
-        if isinstance(message, dict) and message.get("action") == "sound":
-            audio.play_spatial_sound(
-                position=message.get("position", "center"),
-                sound_type=message.get("sound_type", "ui"),
-            )
-            time.sleep(0.2)  # Short pause
-
-        # 2. if its a string speak
-        elif isinstance(message, str):
-            print(f"\n[Audio Thread] Priority {priority}: {message}")
-            audio.speak(message)
-
-        audio_queue.task_done()
+audio_driver = Audio()
+audio_interface = AudioInterface(audio_driver)
+audio_queue = AudioPriorityQueue(audio_interface)
 
 
 # Añade 'depth_driver' a los argumentos del hilo
@@ -177,7 +158,11 @@ if __name__ == "__main__":
         aerial_obstacle_detector,
     )
 
-    t_audio = Thread(target=audio_consumer_thread, daemon=True)
+    t_audio = Thread(
+        target=audio_interface.consume_queue_forever,
+        args=(audio_queue,),
+        daemon=True,
+    )
     t_camera = Thread(
         target=frame_producer_thread,
         args=(
