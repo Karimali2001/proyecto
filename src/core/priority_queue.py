@@ -6,7 +6,7 @@ import time
 class AudioPriorityQueue:
     HOLE_DETECTION = 1
     SEMAPHORE = 2
-    # AIR_OBSTACLE 
+    # AIR_OBSTACLE
     VOICE_MENU = 3
     OBJECT_DETECTION = 4
     TEXT_RECOGNITION = 4
@@ -40,25 +40,24 @@ class AudioPriorityQueue:
         """
         if isinstance(message, dict):
             action = message.get("action")
-            
+
             if action == "sound":
                 sound_type = message.get("sound_type")
                 position = message.get("position")
-                
+
                 if not sound_type or not position:
                     return
-                    
+
                 self.audio_interface.play_spatial_sound(
-                    position=position,
-                    sound_type=sound_type
+                    position=position, sound_type=sound_type
                 )
-                
+
             elif action == "fast_voice":
                 text = message.get("text")
-                
+
                 if not text:
                     return
-                    
+
                 self.audio_interface.speak_fast_background(text)
 
     def put(self, priority, message):
